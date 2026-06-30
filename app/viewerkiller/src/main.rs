@@ -16,7 +16,8 @@ use anyhow::{Context, Result};
 use tokio::sync::mpsc;
 
 use viewerkiller::{
-    controller_session, generate_credentials, serve, ControllerConfig, HostConfig, SessionEvent,
+    controller_session, generate_credentials, serve, AutoAccept, BruteForceGuard, ControllerConfig,
+    HostConfig, SessionEvent,
 };
 use vk_core::protocol::DEFAULT_PORT;
 use vk_media::FrameBuffer;
@@ -72,11 +73,21 @@ async fn run_host() -> Result<()> {
         tile_size: vk_media::DEFAULT_TILE_SIZE,
         quality: vk_media::DEFAULT_QUALITY,
         fps: 15,
+        require_consent: false,
     };
 
     let mut make_capturer = || vk_platform::default_capturer();
     let mut make_injector = || vk_platform::default_injector();
-    serve(&config, &mut make_capturer, &mut make_injector).await
+    let mut guard = BruteForceGuard::new(5, Duration::from_secs(60));
+    let mut consent = AutoAccept;
+    serve(
+        &config,
+        &mut make_capturer,
+        &mut make_injector,
+        &mut guard,
+        &mut consent,
+    )
+    .await
 }
 
 async fn run_connect(code: String, password: String, subnet: Option<(Ipv4Addr, u8)>) -> Result<()> {

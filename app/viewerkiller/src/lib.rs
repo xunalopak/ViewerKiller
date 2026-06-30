@@ -7,9 +7,11 @@
 
 pub mod controller;
 pub mod host;
+pub mod security;
 
 pub use controller::{controller_session, ControllerConfig, SessionEvent};
-pub use host::{handle_connection, serve, HostConfig};
+pub use host::{handle_connection, serve, ConnectionOutcome, HostConfig};
+pub use security::{AutoAccept, BruteForceGuard, Consent, RejectAll};
 
 /// Génère un code de connexion à 6 chiffres et un mot de passe aléatoire fort.
 pub fn generate_credentials() -> (String, String) {

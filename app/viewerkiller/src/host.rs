@@ -1,5 +1,8 @@
 //! Côté hôte : écoute sur l'interface VPN, répond aux sondes de découverte,
 //! établit la session chiffrée, puis diffuse l'écran et injecte les entrées.
+//!
+//! Durcissement intégré : limiteur anti-bruteforce par IP, demande de
+//! consentement après authentification, et journal d'audit (cible `audit`).
 
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -12,7 +15,10 @@ use vk_core::protocol::{ControllerMessage, DiscoveryMessage, HostMessage, InputE
 use vk_media::TileEncoder;
 use vk_net::frame::{read_framed, write_framed};
 use vk_net::transport::EncryptedStream;
+use vk_net::NetError;
 use vk_platform::{InputInjector, ScreenCapturer};
+
+use crate::security::{BruteForceGuard, Consent};
 
 /// Configuration d'un hôte.
 #[derive(Debug, Clone)]
@@ -25,6 +31,25 @@ pub struct HostConfig {
     pub tile_size: u32,
     pub quality: u8,
     pub fps: u32,
+    /// Si vrai, demande un consentement explicite avant chaque session.
+    pub require_consent: bool,
+}
+
+/// Issue du traitement d'une connexion entrante.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionOutcome {
+    /// IP verrouillée par l'anti-bruteforce ; connexion refusée d'emblée.
+    Locked,
+    /// Le code ne correspond pas (souvent une simple sonde de balayage).
+    CodeMismatch,
+    /// Le pair a fermé avant le handshake (cas normal du balayage).
+    Benign,
+    /// Handshake échoué : mauvais mot de passe.
+    AuthFailed,
+    /// Connexion refusée par l'utilisateur (consentement).
+    Refused,
+    /// Session menée à son terme.
+    Completed,
 }
 
 /// Construit un capteur/injecteur à la demande (une instance par session).
@@ -36,31 +61,44 @@ pub async fn serve(
     config: &HostConfig,
     make_capturer: &mut CapturerFactory,
     make_injector: &mut InjectorFactory,
+    guard: &mut BruteForceGuard,
+    consent: &mut dyn Consent,
 ) -> Result<()> {
     let listener = TcpListener::bind(config.bind_addr)
         .await
         .with_context(|| format!("liaison impossible sur {}", config.bind_addr))?;
-    tracing::info!(addr = %config.bind_addr, code = %config.code, "hôte en écoute");
+    tracing::info!(target: "audit", addr = %config.bind_addr, code = %config.code, "hôte en écoute");
 
     loop {
         let (stream, peer) = listener.accept().await?;
-        tracing::debug!(%peer, "connexion entrante");
         let capturer = make_capturer()?;
         let injector = make_injector()?;
-        if let Err(e) = handle_connection(stream, config, capturer, injector).await {
-            tracing::debug!("session/sonde terminée : {e:#}");
+        match handle_connection(stream, config, guard, consent, capturer, injector).await {
+            Ok(outcome) => tracing::debug!(?outcome, %peer, "connexion traitée"),
+            Err(e) => tracing::debug!(%peer, "erreur de connexion : {e:#}"),
         }
     }
 }
 
-/// Traite une connexion entrante : découverte → handshake → session.
+/// Traite une connexion entrante : anti-bruteforce → découverte → handshake →
+/// consentement → session.
 pub async fn handle_connection(
     mut stream: TcpStream,
     config: &HostConfig,
+    guard: &mut BruteForceGuard,
+    consent: &mut dyn Consent,
     capturer: Box<dyn ScreenCapturer>,
     injector: Box<dyn InputInjector>,
-) -> Result<()> {
-    // 1. Découverte : on lit la sonde et on répond.
+) -> Result<ConnectionOutcome> {
+    let peer = stream.peer_addr()?;
+    let ip = peer.ip();
+
+    if !guard.check(ip) {
+        tracing::warn!(target: "audit", %peer, "connexion refusée (verrouillage anti-bruteforce)");
+        return Ok(ConnectionOutcome::Locked);
+    }
+
+    // 1. Découverte.
     let probe: DiscoveryMessage = read_framed(&mut stream).await?;
     let matches = matches!(&probe, DiscoveryMessage::Probe { code, .. } if *code == config.code);
     write_framed(
@@ -72,18 +110,36 @@ pub async fn handle_connection(
     )
     .await?;
     if !matches {
-        return Ok(());
+        return Ok(ConnectionOutcome::CodeMismatch);
     }
 
     // 2. Handshake Noise authentifié par le mot de passe.
     let psk = derive_psk(&config.password);
-    let enc = EncryptedStream::accept(stream, &psk)
-        .await
-        .context("handshake Noise (mot de passe incorrect ?)")?;
-    tracing::info!("session chiffrée établie");
+    let mut enc = match EncryptedStream::accept(stream, &psk).await {
+        Ok(enc) => enc,
+        // Bytes reçus mais tag invalide → mauvais mot de passe.
+        Err(NetError::Crypto(_)) => {
+            guard.record_failure(ip);
+            tracing::warn!(target: "audit", %peer, "échec d'authentification (mot de passe)");
+            return Ok(ConnectionOutcome::AuthFailed);
+        }
+        // Pair fermé avant le handshake (balayage) → bénin, non comptabilisé.
+        Err(NetError::Io(_)) => return Ok(ConnectionOutcome::Benign),
+        Err(e) => return Err(e.into()),
+    };
+    guard.record_success(ip);
 
-    // 3. Session.
-    host_session(enc, capturer, injector, config).await
+    // 3. Consentement.
+    if config.require_consent && !consent.request(peer).await {
+        tracing::info!(target: "audit", %peer, "connexion refusée par l'utilisateur");
+        let _ = enc.send(&HostMessage::Bye).await;
+        return Ok(ConnectionOutcome::Refused);
+    }
+
+    tracing::info!(target: "audit", %peer, host = %config.host_name, "session établie");
+    host_session(enc, capturer, injector, config).await?;
+    tracing::info!(target: "audit", %peer, "session terminée");
+    Ok(ConnectionOutcome::Completed)
 }
 
 async fn host_session(

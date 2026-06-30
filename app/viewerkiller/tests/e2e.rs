@@ -81,6 +81,7 @@ async fn full_pipeline_screen_and_input() {
         tile_size: 64,
         quality: 75,
         fps: 60,
+        require_consent: false,
     };
 
     let recorded = Arc::new(Mutex::new(Vec::new()));
@@ -94,9 +95,18 @@ async fn full_pipeline_screen_and_input() {
             tick: 0,
         });
         let injector: Box<dyn InputInjector> = Box::new(RecordingInjector(recorded_host));
-        viewerkiller::handle_connection(stream, &config, capturer, injector)
-            .await
-            .unwrap();
+        let mut guard = viewerkiller::BruteForceGuard::new(5, Duration::from_secs(60));
+        let mut consent = viewerkiller::AutoAccept;
+        viewerkiller::handle_connection(
+            stream,
+            &config,
+            &mut guard,
+            &mut consent,
+            capturer,
+            injector,
+        )
+        .await
+        .unwrap();
     });
 
     let cfg = ControllerConfig {
