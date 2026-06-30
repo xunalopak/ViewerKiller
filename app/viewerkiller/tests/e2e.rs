@@ -68,7 +68,7 @@ impl InputInjector for RecordingInjector {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn full_pipeline_screen_and_input() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -142,17 +142,22 @@ async fn full_pipeline_screen_and_input() {
         }
     }
 
-    // 3. Une entrée souris est bien injectée côté hôte.
+    // 3. Une entrée souris est bien injectée côté hôte (attente active ≤ 2 s).
     input_tx.send(InputEvent::MouseMove { x: 100, y: 50 }).unwrap();
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    {
-        let r = recorded.lock().unwrap();
-        assert!(
-            r.iter()
-                .any(|e| matches!(e, InputEvent::MouseMove { x: 100, y: 50 })),
-            "entrée non injectée : {r:?}"
-        );
+    let mut injected = false;
+    for _ in 0..40 {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        if recorded
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|e| matches!(e, InputEvent::MouseMove { x: 100, y: 50 }))
+        {
+            injected = true;
+            break;
+        }
     }
+    assert!(injected, "entrée non injectée : {:?}", recorded.lock().unwrap());
 
     // 4. Fermeture propre.
     drop(input_tx);

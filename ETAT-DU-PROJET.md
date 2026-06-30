@@ -27,13 +27,14 @@ Dernière mise à jour : **2026-06-30**. Plan détaillé :
       implémenter sur Windows.
 - [ ] **J5 — Injection clavier/souris Windows (SendInput)** — idem placeholder
       (`WindowsInjector`). À implémenter sur Windows.
-- [x] **J7 (partie orchestration) — boucles hôte/contrôleur** (`app/viewerkiller`)
-      — testé de bout en bout en headless (`tests/e2e.rs`).
-- [ ] **J6 — UI egui** (accueil hôte/contrôleur + rendu écran + capture
-      d'événements). Pas commencé. L'orchestration expose déjà des canaux
-      (`SessionEvent` en sortie, `InputEvent` en entrée) prêts à brancher.
-- [ ] **J7 (durcissement)** — anti-bruteforce sur le mot de passe, consentement
-      explicite côté hôte, journal d'audit. Pas commencé.
+- [x] **J6 — UI egui** (`app/viewerkiller/src/gui.rs`, bin `viewerkiller-gui`) —
+      **compile** sur Linux ; exécution nécessite un affichage. Accueil, écran
+      hôte (code+mdp), session contrôleur (rendu texture + capture souris/clavier
+      → `InputEvent`). egui/eframe **épinglés en 0.29** (les 0.3x ont refondu
+      l'API ; mettre à jour plus tard si besoin).
+- [x] **J7 — orchestration + durcissement** (`app/viewerkiller`) — testé e2e
+      headless (`tests/e2e.rs`) et durcissement (`tests/hardening.rs`,
+      `security.rs`) : anti-bruteforce par IP, consentement, audit.
 
 ## Carte des crates
 ```
@@ -41,8 +42,15 @@ crates/vk-core/      protocole (protocol.rs), cadrage (codec.rs), crypto Noise (
 crates/vk-platform/  traits ScreenCapturer/InputInjector ; stub (Linux), windows.rs (placeholder)
 crates/vk-net/       frame.rs (cadrage async clair), transport.rs (EncryptedStream), discovery.rs (scan)
 crates/vk-media/     TileEncoder (diff+JPEG) + FrameBuffer (décode→RGBA)
-app/viewerkiller/    lib : host.rs, controller.rs ; bin : main.rs (CLI) ; tests/e2e.rs
+app/viewerkiller/    lib : host.rs, controller.rs, security.rs
+                     bin : main.rs (CLI viewerkiller), gui.rs (viewerkiller-gui, egui)
+                     tests : e2e.rs, hardening.rs
 ```
+
+> Note perf : l'encodage JPEG dans `host_session` est **synchrone** sur le
+> runtime ; les binaires utilisent un runtime multi-thread donc OK, mais une
+> optimisation future = `spawn_blocking` pour l'encode. Le test e2e force
+> `multi_thread` pour éviter la starvation.
 
 ## Format réseau (rappel)
 1. Découverte (en clair, dans le tunnel VPN) : `DiscoveryMessage::Probe{code}` →
@@ -63,13 +71,7 @@ cargo run -p viewerkiller -- connect <code> <mot_de_passe> [ip/prefixe]
 ```
 
 ## Reprise — prochaines étapes concrètes
-1. **J6 (UI egui)** — la plus rentable et faisable hors Windows (le stub produit
-   une image). Ajouter `eframe`/`egui` à `app/viewerkiller`. Côté contrôleur :
-   uploader `FrameBuffer.rgba` comme texture, mapper les events egui →
-   `InputEvent` (souris en coords écran distant, touches → codes VK). Côté hôte :
-   écran affichant code + mot de passe. Brancher sur les canaux existants de
-   `controller_session`.
-2. **J4b/J5 (Windows)** — implémenter `WindowsCapturer` (DXGI Desktop Duplication
+1. **J4b/J5 (Windows)** — implémenter `WindowsCapturer` (DXGI Desktop Duplication
    via le crate `windows`, ou `scrap` pour aller vite) et `WindowsInjector`
    (`SendInput` via `enigo` ou le crate `windows`). Dépendances à décommenter dans
    `crates/vk-platform/Cargo.toml` (section `[target.'cfg(windows)'.dependencies]`).

@@ -30,6 +30,9 @@ thiserror = "2"
 snow = "0.9"
 tokio = { version = "1", features = ["net", "io-util", "rt-multi-thread", "macros", "time", "sync"] }
 if-addrs = "0.13"
+# egui 0.29 : API stable et maîtrisée (les 0.3x ultérieures ont refondu l'API).
+eframe = "0.29"
+egui = "0.29"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 blake3 = "1"
