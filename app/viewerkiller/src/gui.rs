@@ -135,7 +135,8 @@ impl SessionScreen {
             return;
         }
         if let (Some(fb), Some((w, h))) = (self.fb.as_ref(), self.remote_size) {
-            let image = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], &fb.rgba);
+            let image =
+                egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], &fb.rgba);
             match self.texture.as_mut() {
                 Some(tex) => tex.set(image, egui::TextureOptions::LINEAR),
                 None => {
@@ -217,8 +218,10 @@ impl eframe::App for App {
                         });
                     ui.add_space(10.0);
                     ui.label(
-                        egui::RichText::new("Sous-réseau vide = détection auto de l'interface VPN.")
-                            .weak(),
+                        egui::RichText::new(
+                            "Sous-réseau vide = détection auto de l'interface VPN.",
+                        )
+                        .weak(),
                     );
                     ui.add_space(20.0);
                     ui.horizontal(|ui| {
@@ -290,9 +293,10 @@ impl eframe::App for App {
         if matches!(self.screen, Screen::Connecting) {
             if let Some(result) = poll_connect() {
                 next = Some(match result {
-                    ConnectResult::Ready { events_rx, input_tx } => {
-                        Screen::Session(SessionScreen::new(events_rx, input_tx))
-                    }
+                    ConnectResult::Ready {
+                        events_rx,
+                        input_tx,
+                    } => Screen::Session(SessionScreen::new(events_rx, input_tx)),
                     ConnectResult::Failed(e) => Screen::Error(e),
                 });
             }
@@ -466,7 +470,10 @@ fn start_connect(rt: &tokio::runtime::Runtime, form: &ConnectForm) -> Result<Scr
                 let (events_tx, events_rx) = mpsc::unbounded_channel();
                 let (input_tx, input_rx) = mpsc::unbounded_channel();
                 tokio::spawn(controller_session(enc, events_tx, input_rx));
-                let _ = tx.send(ConnectResult::Ready { events_rx, input_tx });
+                let _ = tx.send(ConnectResult::Ready {
+                    events_rx,
+                    input_tx,
+                });
             }
             Err(e) => {
                 let _ = tx.send(ConnectResult::Failed(format!("{e:#}")));
@@ -496,12 +503,42 @@ fn hostname() -> String {
 fn egui_key_to_vk(key: egui::Key) -> Option<u32> {
     use egui::Key::*;
     let vk = match key {
-        A => 0x41, B => 0x42, C => 0x43, D => 0x44, E => 0x45, F => 0x46, G => 0x47,
-        H => 0x48, I => 0x49, J => 0x4A, K => 0x4B, L => 0x4C, M => 0x4D, N => 0x4E,
-        O => 0x4F, P => 0x50, Q => 0x51, R => 0x52, S => 0x53, T => 0x54, U => 0x55,
-        V => 0x56, W => 0x57, X => 0x58, Y => 0x59, Z => 0x5A,
-        Num0 => 0x30, Num1 => 0x31, Num2 => 0x32, Num3 => 0x33, Num4 => 0x34,
-        Num5 => 0x35, Num6 => 0x36, Num7 => 0x37, Num8 => 0x38, Num9 => 0x39,
+        A => 0x41,
+        B => 0x42,
+        C => 0x43,
+        D => 0x44,
+        E => 0x45,
+        F => 0x46,
+        G => 0x47,
+        H => 0x48,
+        I => 0x49,
+        J => 0x4A,
+        K => 0x4B,
+        L => 0x4C,
+        M => 0x4D,
+        N => 0x4E,
+        O => 0x4F,
+        P => 0x50,
+        Q => 0x51,
+        R => 0x52,
+        S => 0x53,
+        T => 0x54,
+        U => 0x55,
+        V => 0x56,
+        W => 0x57,
+        X => 0x58,
+        Y => 0x59,
+        Z => 0x5A,
+        Num0 => 0x30,
+        Num1 => 0x31,
+        Num2 => 0x32,
+        Num3 => 0x33,
+        Num4 => 0x34,
+        Num5 => 0x35,
+        Num6 => 0x36,
+        Num7 => 0x37,
+        Num8 => 0x38,
+        Num9 => 0x39,
         Enter => 0x0D,
         Space => 0x20,
         Backspace => 0x08,
@@ -517,8 +554,18 @@ fn egui_key_to_vk(key: egui::Key) -> Option<u32> {
         ArrowUp => 0x26,
         ArrowRight => 0x27,
         ArrowDown => 0x28,
-        F1 => 0x70, F2 => 0x71, F3 => 0x72, F4 => 0x73, F5 => 0x74, F6 => 0x75,
-        F7 => 0x76, F8 => 0x77, F9 => 0x78, F10 => 0x79, F11 => 0x7A, F12 => 0x7B,
+        F1 => 0x70,
+        F2 => 0x71,
+        F3 => 0x72,
+        F4 => 0x73,
+        F5 => 0x74,
+        F6 => 0x75,
+        F7 => 0x76,
+        F8 => 0x77,
+        F9 => 0x78,
+        F10 => 0x79,
+        F11 => 0x7A,
+        F12 => 0x7B,
         _ => return None,
     };
     Some(vk)

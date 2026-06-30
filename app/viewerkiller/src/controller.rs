@@ -9,7 +9,9 @@ use tokio::net::TcpStream;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use vk_core::crypto::derive_psk;
-use vk_core::protocol::{ControllerMessage, DiscoveryMessage, FrameUpdate, HostMessage, InputEvent, PROTO_VERSION};
+use vk_core::protocol::{
+    ControllerMessage, DiscoveryMessage, FrameUpdate, HostMessage, InputEvent, PROTO_VERSION,
+};
 use vk_net::discovery::{find_host_by_code, guess_wireguard_interface, hosts_in_subnet};
 use vk_net::frame::{read_framed, write_framed};
 use vk_net::transport::EncryptedStream;
@@ -51,9 +53,15 @@ pub async fn discover_and_connect(
 
     let hosts = hosts_in_subnet(ip, prefix);
     tracing::info!(count = hosts.len(), "balayage du sous-réseau");
-    let addr = find_host_by_code(hosts, config.port, config.code.clone(), per_host_timeout, 128)
-        .await
-        .context("aucun hôte ne correspond à ce code sur le VPN")?;
+    let addr = find_host_by_code(
+        hosts,
+        config.port,
+        config.code.clone(),
+        per_host_timeout,
+        128,
+    )
+    .await
+    .context("aucun hôte ne correspond à ce code sur le VPN")?;
     tracing::info!(%addr, "hôte trouvé");
     connect_to(addr, config).await
 }

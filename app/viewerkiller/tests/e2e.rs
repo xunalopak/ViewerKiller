@@ -59,11 +59,17 @@ impl InputInjector for RecordingInjector {
         Ok(())
     }
     fn mouse_scroll(&mut self, dx: i32, dy: i32) -> anyhow::Result<()> {
-        self.0.lock().unwrap().push(InputEvent::MouseScroll { dx, dy });
+        self.0
+            .lock()
+            .unwrap()
+            .push(InputEvent::MouseScroll { dx, dy });
         Ok(())
     }
     fn key(&mut self, key: u32, pressed: bool) -> anyhow::Result<()> {
-        self.0.lock().unwrap().push(InputEvent::Key { key, pressed });
+        self.0
+            .lock()
+            .unwrap()
+            .push(InputEvent::Key { key, pressed });
         Ok(())
     }
 }
@@ -143,7 +149,9 @@ async fn full_pipeline_screen_and_input() {
     }
 
     // 3. Une entrée souris est bien injectée côté hôte (attente active ≤ 2 s).
-    input_tx.send(InputEvent::MouseMove { x: 100, y: 50 }).unwrap();
+    input_tx
+        .send(InputEvent::MouseMove { x: 100, y: 50 })
+        .unwrap();
     let mut injected = false;
     for _ in 0..40 {
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -157,7 +165,11 @@ async fn full_pipeline_screen_and_input() {
             break;
         }
     }
-    assert!(injected, "entrée non injectée : {:?}", recorded.lock().unwrap());
+    assert!(
+        injected,
+        "entrée non injectée : {:?}",
+        recorded.lock().unwrap()
+    );
 
     // 4. Fermeture propre.
     drop(input_tx);

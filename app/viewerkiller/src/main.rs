@@ -38,7 +38,9 @@ async fn main() -> Result<()> {
     match args.get(1).map(String::as_str) {
         Some("host") => run_host().await,
         Some("connect") => {
-            let code = args.get(2).context("usage : viewerkiller connect <code> <mot_de_passe> [sous-réseau]")?;
+            let code = args
+                .get(2)
+                .context("usage : viewerkiller connect <code> <mot_de_passe> [sous-réseau]")?;
             let password = args.get(3).context("mot de passe manquant")?;
             let subnet = args.get(4).map(|s| parse_subnet(s)).transpose()?;
             run_connect(code.clone(), password.clone(), subnet).await
@@ -96,12 +98,9 @@ async fn run_connect(code: String, password: String, subnet: Option<(Ipv4Addr, u
         password,
         port: DEFAULT_PORT,
     };
-    let enc = viewerkiller::controller::discover_and_connect(
-        subnet,
-        &config,
-        Duration::from_millis(400),
-    )
-    .await?;
+    let enc =
+        viewerkiller::controller::discover_and_connect(subnet, &config, Duration::from_millis(400))
+            .await?;
 
     let (events_tx, mut events_rx) = mpsc::unbounded_channel();
     let (_input_tx, input_rx) = mpsc::unbounded_channel();
@@ -135,7 +134,9 @@ async fn run_connect(code: String, password: String, subnet: Option<(Ipv4Addr, u
 }
 
 fn parse_subnet(s: &str) -> Result<(Ipv4Addr, u8)> {
-    let (ip, prefix) = s.split_once('/').context("format attendu : ip/prefixe (ex. 10.0.0.0/24)")?;
+    let (ip, prefix) = s
+        .split_once('/')
+        .context("format attendu : ip/prefixe (ex. 10.0.0.0/24)")?;
     Ok((ip.parse()?, prefix.parse()?))
 }
 

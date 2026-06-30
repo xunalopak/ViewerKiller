@@ -36,11 +36,23 @@ pub enum MouseButton {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InputEvent {
     /// Position absolue dans les coordonnées écran de l'hôte.
-    MouseMove { x: i32, y: i32 },
-    MouseButton { button: MouseButton, pressed: bool },
-    MouseScroll { dx: i32, dy: i32 },
+    MouseMove {
+        x: i32,
+        y: i32,
+    },
+    MouseButton {
+        button: MouseButton,
+        pressed: bool,
+    },
+    MouseScroll {
+        dx: i32,
+        dy: i32,
+    },
     /// Touche clavier (code de touche virtuel Windows), pressée ou relâchée.
-    Key { key: u32, pressed: bool },
+    Key {
+        key: u32,
+        pressed: bool,
+    },
 }
 
 /// Codec d'une tuile d'image.
@@ -84,7 +96,10 @@ pub enum ControllerMessage {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HostMessage {
     /// Géométrie de l'écran partagé, envoyée en début de session.
-    ScreenInfo { width: u32, height: u32 },
+    ScreenInfo {
+        width: u32,
+        height: u32,
+    },
     /// Mise à jour d'image.
     Frame(FrameUpdate),
     Bye,

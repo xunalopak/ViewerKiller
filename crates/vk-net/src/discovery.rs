@@ -81,7 +81,11 @@ pub fn hosts_in_subnet(ip: Ipv4Addr, prefix: u8) -> Vec<Ipv4Addr> {
         return Vec::new();
     }
     let bits = 32 - prefix as u32; // 0..=31
-    let mask: u32 = if bits == 0 { u32::MAX } else { u32::MAX << bits };
+    let mask: u32 = if bits == 0 {
+        u32::MAX
+    } else {
+        u32::MAX << bits
+    };
     let total: u32 = 1u32 << bits;
     let network = u32::from(ip) & mask;
 

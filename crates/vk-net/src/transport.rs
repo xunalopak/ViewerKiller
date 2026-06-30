@@ -89,7 +89,10 @@ impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {
 
 /// Écrit un enregistrement `[u16 longueur][données]`.
 async fn write_record<S: AsyncWrite + Unpin>(s: &mut S, data: &[u8]) -> Result<()> {
-    debug_assert!(data.len() <= u16::MAX as usize, "enregistrement > 65535 octets");
+    debug_assert!(
+        data.len() <= u16::MAX as usize,
+        "enregistrement > 65535 octets"
+    );
     s.write_all(&(data.len() as u16).to_be_bytes()).await?;
     s.write_all(data).await?;
     Ok(())

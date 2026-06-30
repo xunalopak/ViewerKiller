@@ -93,7 +93,9 @@ async fn probe_then_encrypted_session_round_trip() {
         }
     );
 
-    enc.send(&ControllerMessage::RequestFullFrame).await.unwrap();
+    enc.send(&ControllerMessage::RequestFullFrame)
+        .await
+        .unwrap();
     let frame: HostMessage = enc.recv().await.unwrap();
     match frame {
         HostMessage::Frame(fu) => {

@@ -59,8 +59,7 @@ impl FrameReader {
         if self.buf.len() < 4 {
             return Ok(None);
         }
-        let len =
-            u32::from_be_bytes([self.buf[0], self.buf[1], self.buf[2], self.buf[3]]) as usize;
+        let len = u32::from_be_bytes([self.buf[0], self.buf[1], self.buf[2], self.buf[3]]) as usize;
         if len > MAX_FRAME_LEN {
             return Err(CodecError::FrameTooLarge(len));
         }

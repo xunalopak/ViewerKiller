@@ -140,7 +140,14 @@ impl FrameBuffer {
         Ok(())
     }
 
-    fn blit(&mut self, rgba_tile: &[u8], x: u32, y: u32, tw: u32, th: u32) -> Result<(), MediaError> {
+    fn blit(
+        &mut self,
+        rgba_tile: &[u8],
+        x: u32,
+        y: u32,
+        tw: u32,
+        th: u32,
+    ) -> Result<(), MediaError> {
         if x + tw > self.width || y + th > self.height {
             return Err(MediaError::BadTile);
         }

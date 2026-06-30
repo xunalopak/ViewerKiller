@@ -8,6 +8,7 @@ use tokio::net::TcpListener;
 use viewerkiller::{
     AutoAccept, BruteForceGuard, ConnectionOutcome, ControllerConfig, HostConfig, RejectAll,
 };
+use vk_platform::{Frame, InputInjector, ScreenCapturer};
 
 fn host_config(addr: std::net::SocketAddr, require_consent: bool) -> HostConfig {
     HostConfig {
@@ -22,11 +23,43 @@ fn host_config(addr: std::net::SocketAddr, require_consent: bool) -> HostConfig 
     }
 }
 
-fn capturer() -> Box<dyn vk_platform::ScreenCapturer> {
-    vk_platform::default_capturer().unwrap()
+// Stubs neutres, indépendants de la plateforme (la capture n'est jamais atteinte
+// dans ces scénarios : verrouillage / mauvais mot de passe / refus).
+struct NullCapturer;
+impl ScreenCapturer for NullCapturer {
+    fn dimensions(&self) -> (u32, u32) {
+        (1, 1)
+    }
+    fn capture(&mut self) -> anyhow::Result<Option<Frame>> {
+        Ok(None)
+    }
 }
-fn injector() -> Box<dyn vk_platform::InputInjector> {
-    vk_platform::default_injector().unwrap()
+
+struct NullInjector;
+impl InputInjector for NullInjector {
+    fn mouse_move(&mut self, _x: i32, _y: i32) -> anyhow::Result<()> {
+        Ok(())
+    }
+    fn mouse_button(
+        &mut self,
+        _button: vk_core::protocol::MouseButton,
+        _pressed: bool,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+    fn mouse_scroll(&mut self, _dx: i32, _dy: i32) -> anyhow::Result<()> {
+        Ok(())
+    }
+    fn key(&mut self, _key: u32, _pressed: bool) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+fn capturer() -> Box<dyn ScreenCapturer> {
+    Box::new(NullCapturer)
+}
+fn injector() -> Box<dyn InputInjector> {
+    Box::new(NullInjector)
 }
 
 #[tokio::test]
