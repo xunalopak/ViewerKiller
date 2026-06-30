@@ -1,0 +1,16 @@
+[package]
+name = "vk-platform"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+vk-core.workspace = true
+anyhow.workspace = true
+
+# Les implémentations natives Windows (capture DXGI, injection SendInput) sont
+# ajoutées aux jalons 4 et 5 et ne sont tirées que pour la cible Windows :
+[target.'cfg(windows)'.dependencies]
+# scrap = "0.5"
+# enigo = "0.3"

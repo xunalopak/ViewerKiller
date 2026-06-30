@@ -1,0 +1,25 @@
+[package]
+name = "viewerkiller"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "viewerkiller"
+path = "src/lib.rs"
+
+[[bin]]
+name = "viewerkiller"
+path = "src/main.rs"
+
+[dependencies]
+vk-core.workspace = true
+vk-platform.workspace = true
+vk-net.workspace = true
+vk-media.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tokio.workspace = true
+rand.workspace = true
