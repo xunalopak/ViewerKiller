@@ -9,8 +9,13 @@ rust-version.workspace = true
 vk-core.workspace = true
 anyhow.workspace = true
 
-# Les implémentations natives Windows (capture DXGI, injection SendInput) sont
-# ajoutées aux jalons 4 et 5 et ne sont tirées que pour la cible Windows :
-[target.'cfg(windows)'.dependencies]
-# scrap = "0.5"
-# enigo = "0.3"
+# Implémentation native Windows (capture GDI + injection SendInput), tirée
+# uniquement pour la cible Windows, via le crate officiel `windows`.
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.58"
+features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+]

@@ -22,11 +22,13 @@ Dernière mise à jour : **2026-06-30**. Plan détaillé :
 - [x] **J2 — Crypto Noise NNpsk0 + dérivation PSK** (`crates/vk-core/crypto.rs`) — testé.
 - [x] **J3 — Transport TCP chiffré + découverte VPN** (`crates/vk-net`) — testé.
 - [x] **J4a — Encodage/diff par tuiles (portable)** (`crates/vk-media`) — testé.
-- [ ] **J4b — Capture écran Windows (DXGI)** — `crates/vk-platform/src/windows.rs`
-      est un **placeholder** (`WindowsCapturer::new()` renvoie une erreur). À
-      implémenter sur Windows.
-- [ ] **J5 — Injection clavier/souris Windows (SendInput)** — idem placeholder
-      (`WindowsInjector`). À implémenter sur Windows.
+- [x] **J4b — Capture écran Windows** — `WindowsCapturer` via **GDI BitBlt**
+      (crate `windows`) dans `crates/vk-platform/src/windows.rs`.
+      **Vérifié à la compilation** en cross-build Windows ; reste à tester au
+      runtime sur Windows. DXGI = optimisation perf future.
+- [x] **J5 — Injection clavier/souris Windows** — `WindowsInjector` via
+      **`SendInput`** (souris absolue 0..65535, molette, touches VK). Vérifié à
+      la compilation en cross-build ; reste à tester au runtime.
 - [x] **J6 — UI egui** (`app/viewerkiller/src/gui.rs`, bin `viewerkiller-gui`) —
       **compile** sur Linux ; exécution nécessite un affichage. Accueil, écran
       hôte (code+mdp), session contrôleur (rendu texture + capture souris/clavier
@@ -63,26 +65,29 @@ app/viewerkiller/    lib : host.rs, controller.rs, security.rs
 
 ## Build & test
 ```bash
-cargo test --workspace      # 21 tests, tous verts sur Linux
+cargo test --workspace      # 26 tests, tous verts sur Linux
 cargo build --workspace
+# Vérif du code Windows (#[cfg(windows)]) sans machine Windows, type-check seul :
+rustup target add x86_64-pc-windows-gnu
+cargo check --target x86_64-pc-windows-gnu --workspace
 # CLI (Linux, capteur factice via le stub) :
 cargo run -p viewerkiller -- host
 cargo run -p viewerkiller -- connect <code> <mot_de_passe> [ip/prefixe]
 ```
 
 ## Reprise — prochaines étapes concrètes
-1. **J4b/J5 (Windows)** — implémenter `WindowsCapturer` (DXGI Desktop Duplication
-   via le crate `windows`, ou `scrap` pour aller vite) et `WindowsInjector`
-   (`SendInput` via `enigo` ou le crate `windows`). Dépendances à décommenter dans
-   `crates/vk-platform/Cargo.toml` (section `[target.'cfg(windows)'.dependencies]`).
-   Mapper coordonnées absolues (MouseMove en coords écran) → unités
-   `0..65535` de `SendInput`.
-3. **J7 durcissement** — compteur d'échecs de mot de passe + backoff dans
-   `host::handle_connection` ; message de consentement (accept/refuse) avant
-   `host_session` ; log d'audit (qui/quand).
-4. **Test sur Windows** — deux machines du même VPN WireGuard : `host` affiche le
-   code, `connect <code> <mdp>`. Vérifier depuis un hôte hors-VPN que le port
-   47600 est injoignable (`Test-NetConnection <ip-vpn> -Port 47600`).
+Tous les jalons sont codés et vérifiés (tests Linux + cross-check Windows). Reste
+la **validation runtime** et la perf :
+1. **Test runtime sur Windows** — `cargo run --bin viewerkiller-gui` (ou la CLI)
+   sur deux machines du même VPN WireGuard. L'hôte affiche le code+mdp ; le
+   contrôleur saisit code+mdp → écran distant + contrôle. Points à valider en
+   conditions réelles : capture GDI (couleurs BGRA, stride), `SendInput` (coords
+   absolues, molette), détection de l'interface WireGuard (`guess_wireguard_interface`).
+2. **Sécurité réseau** — depuis un hôte **hors-VPN**, vérifier que le port 47600
+   est **injoignable** (`Test-NetConnection <ip-vpn> -Port 47600`).
+3. **Perf** — encoder dans un `spawn_blocking` (l'encode JPEG est synchrone) ;
+   envisager DXGI Desktop Duplication + un codec vidéo (H.264/VP9) pour le plein
+   écran fluide ; tuiles natives « dirty rects ».
 
 ## Pièges connus / notes
 - `TileCodec` a été renommé `ZstdRgba` → `DeflateBgra` (deflate pur Rust, pas de
@@ -93,3 +98,8 @@ cargo run -p viewerkiller -- connect <code> <mot_de_passe> [ip/prefixe]
 - `EncryptedStream` utilise un seul `Transport` Noise (nonces séparés par sens) ;
   ne pas tenter de splitter lecture/écriture sur deux tâches sans mutex — la
   boucle de session utilise `tokio::select!`.
+- Capture Windows = **GDI BitBlt** (pas DXGI) : `scrap` ne cross-compile pas
+  (backend X11 mal gardé). `WindowsCapturer` est marqué `unsafe impl Send`
+  (handles GDI mono-thread).
+- egui/eframe **0.29** (les 0.3x ont refondu l'API : `App::update`→`App::ui`,
+  etc.) — ne pas monter de version sans réécrire `gui.rs`.
