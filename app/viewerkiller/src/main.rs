@@ -123,8 +123,11 @@ async fn run_connect(code: String, password: String, subnet: Option<(Ipv4Addr, u
                     tracing::info!(frames, "trames reçues");
                 }
             }
-            SessionEvent::Disconnected => {
-                tracing::info!("session terminée");
+            SessionEvent::Disconnected(reason) => {
+                match reason {
+                    Some(r) => tracing::warn!("session terminée : {r}"),
+                    None => tracing::info!("session terminée"),
+                }
                 break;
             }
         }

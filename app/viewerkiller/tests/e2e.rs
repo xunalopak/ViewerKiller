@@ -144,7 +144,7 @@ async fn full_pipeline_screen_and_input() {
                 frames += 1;
             }
             SessionEvent::ScreenInfo { .. } => {}
-            SessionEvent::Disconnected => panic!("déconnexion prématurée"),
+            SessionEvent::Disconnected(reason) => panic!("déconnexion prématurée : {reason:?}"),
         }
     }
 

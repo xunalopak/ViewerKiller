@@ -5,7 +5,7 @@
 > chiffrement bout-en-bout (Noise) par-dessus le VPN, code de connexion + mot de
 > passe, découverte par balayage du sous-réseau.
 
-Dernière mise à jour : **2026-06-30**. Plan détaillé :
+Dernière mise à jour : **2026-07-01** (v0.1.1). Plan détaillé :
 `~/.claude/plans/j-aimerai-construire-une-alternative-peaceful-castle.md`.
 
 ## Décisions verrouillées
@@ -88,6 +88,17 @@ la **validation runtime** et la perf :
 3. **Perf** — encoder dans un `spawn_blocking` (l'encode JPEG est synchrone) ;
    envisager DXGI Desktop Duplication + un codec vidéo (H.264/VP9) pour le plein
    écran fluide ; tuiles natives « dirty rects ».
+
+## Diagnostic réseau (v0.1.1)
+- Panne observée sur VPN réel : hôte « session établie » mais contrôleur
+  « session terminée » dès la 1re image = **trou noir MTU** WireGuard (petits
+  paquets OK, gros paquets perdus). Fix = terrain, pas code : `MTU = 1380`
+  (voire 1280) dans les deux configs WireGuard. Voir la section *Dépannage* du
+  README.
+- Côté code (0.1.1) : `SessionEvent::Disconnected` porte désormais une
+  `Option<String>` (raison) affichée dans l'UI/CLI ; `connect_to` a un
+  `CONNECT_TIMEOUT` (10 s) ; un échec d'envoi d'entrée ne laisse plus l'UI sans
+  événement de fin.
 
 ## Pièges connus / notes
 - `TileCodec` a été renommé `ZstdRgba` → `DeflateBgra` (deflate pur Rust, pas de

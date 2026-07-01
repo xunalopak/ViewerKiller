@@ -89,6 +89,7 @@ struct SessionScreen {
     primary_down: bool,
     secondary_down: bool,
     disconnected: bool,
+    disconnect_reason: Option<String>,
 }
 
 impl SessionScreen {
@@ -106,6 +107,7 @@ impl SessionScreen {
             primary_down: false,
             secondary_down: false,
             disconnected: false,
+            disconnect_reason: None,
         }
     }
 
@@ -125,7 +127,10 @@ impl SessionScreen {
                         }
                     }
                 }
-                SessionEvent::Disconnected => self.disconnected = true,
+                SessionEvent::Disconnected(reason) => {
+                    self.disconnected = true;
+                    self.disconnect_reason = reason;
+                }
             }
         }
     }
@@ -254,7 +259,11 @@ impl eframe::App for App {
                 session.pump();
                 session.refresh_texture(ctx);
                 if session.disconnected {
-                    next = Some(Screen::Error("Session terminée.".into()));
+                    let msg = match &session.disconnect_reason {
+                        Some(r) => format!("Session terminée : {r}"),
+                        None => "Session terminée.".into(),
+                    };
+                    next = Some(Screen::Error(msg));
                 } else {
                     egui::TopBottomPanel::top("barre").show(ctx, |ui| {
                         ui.horizontal(|ui| {

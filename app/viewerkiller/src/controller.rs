@@ -29,8 +29,13 @@ pub struct ControllerConfig {
 pub enum SessionEvent {
     ScreenInfo { width: u32, height: u32 },
     Frame(FrameUpdate),
-    Disconnected,
+    /// Fin de session. `Some(raison)` en cas de coupure anormale (réseau,
+    /// déchiffrement…) ; `None` pour une fin propre (Bye ou UI fermée).
+    Disconnected(Option<String>),
 }
+
+/// Délai maximal pour établir une session (connexion TCP + sonde + handshake).
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Découvre l'hôte affichant le code sur le VPN, puis établit la session.
 ///
@@ -72,26 +77,33 @@ pub async fn connect_to(
     addr: SocketAddr,
     config: &ControllerConfig,
 ) -> Result<EncryptedStream<TcpStream>> {
-    let mut stream = TcpStream::connect(addr).await?;
+    // Garde-fou : si l'hôte accepte la connexion TCP mais ne répond plus ensuite
+    // (trou noir MTU du tunnel qui bloque les gros paquets, pare-feu, hôte figé…),
+    // on échoue proprement au lieu de bloquer l'interface indéfiniment.
+    tokio::time::timeout(CONNECT_TIMEOUT, async {
+        let mut stream = TcpStream::connect(addr).await?;
 
-    // Confirme le code auprès de l'hôte avant le handshake.
-    write_framed(
-        &mut stream,
-        &DiscoveryMessage::Probe {
-            proto_version: PROTO_VERSION,
-            code: config.code.clone(),
-        },
-    )
-    .await?;
-    match read_framed::<_, DiscoveryMessage>(&mut stream).await? {
-        DiscoveryMessage::ProbeResult { matches: true, .. } => {}
-        _ => anyhow::bail!("l'hôte ne reconnaît pas ce code"),
-    }
+        // Confirme le code auprès de l'hôte avant le handshake.
+        write_framed(
+            &mut stream,
+            &DiscoveryMessage::Probe {
+                proto_version: PROTO_VERSION,
+                code: config.code.clone(),
+            },
+        )
+        .await?;
+        match read_framed::<_, DiscoveryMessage>(&mut stream).await? {
+            DiscoveryMessage::ProbeResult { matches: true, .. } => {}
+            _ => anyhow::bail!("l'hôte ne reconnaît pas ce code"),
+        }
 
-    let psk = derive_psk(&config.password);
-    EncryptedStream::connect(stream, &psk)
-        .await
-        .context("handshake Noise (mot de passe incorrect ?)")
+        let psk = derive_psk(&config.password);
+        EncryptedStream::connect(stream, &psk)
+            .await
+            .context("handshake Noise (mot de passe incorrect ?)")
+    })
+    .await
+    .context("délai de connexion dépassé (hôte injoignable ou tunnel VPN saturé ?)")?
 }
 
 /// Boucle de session : reçoit les trames (vers `events_tx`) et envoie les
@@ -101,6 +113,9 @@ pub async fn controller_session(
     events_tx: UnboundedSender<SessionEvent>,
     mut input_rx: UnboundedReceiver<InputEvent>,
 ) -> Result<()> {
+    // Raison de fin : renseignée uniquement en cas de coupure anormale, pour que
+    // l'UI distingue un vrai problème réseau d'une fin propre (Bye / fermeture).
+    let mut reason: Option<String> = None;
     loop {
         tokio::select! {
             msg = enc.recv::<HostMessage>() => {
@@ -115,14 +130,25 @@ pub async fn controller_session(
                     }
                     Ok(HostMessage::Bye) => break,
                     Err(e) => {
-                        tracing::warn!("réception interrompue : {e:#}");
+                        let m = format!("réception interrompue : {e:#}");
+                        tracing::warn!("{m}");
+                        reason = Some(m);
                         break;
                     }
                 }
             }
             ev = input_rx.recv() => {
                 match ev {
-                    Some(ev) => enc.send(&ControllerMessage::Input(ev)).await?,
+                    // Un échec d'envoi = coupure réseau : on le signale au lieu de
+                    // propager l'erreur (ce qui laissait l'UI sans « Disconnected »).
+                    Some(ev) => {
+                        if let Err(e) = enc.send(&ControllerMessage::Input(ev)).await {
+                            let m = format!("envoi interrompu : {e:#}");
+                            tracing::warn!("{m}");
+                            reason = Some(m);
+                            break;
+                        }
+                    }
                     None => {
                         let _ = enc.send(&ControllerMessage::Bye).await;
                         break;
@@ -131,6 +157,6 @@ pub async fn controller_session(
             }
         }
     }
-    let _ = events_tx.send(SessionEvent::Disconnected);
+    let _ = events_tx.send(SessionEvent::Disconnected(reason));
     Ok(())
 }

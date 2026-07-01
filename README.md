@@ -65,6 +65,42 @@ viewerkiller connect <code> <mot_de_passe> [ip/prefixe]
 Le sous-réseau est détecté automatiquement depuis l'interface VPN ; on peut le
 forcer (ex. `10.0.0.0/24`).
 
+## Dépannage
+
+### « Connexion établie » côté hôte, mais « Session terminée » côté contrôleur
+
+Symptôme typique sur deux machines reliées par WireGuard : l'hôte affiche
+*session établie*, puis le contrôleur se déconnecte aussitôt. La découverte et le
+handshake (petits paquets) passent, mais la **première image** (gros paquets)
+est perdue : c'est un **trou noir MTU** dans le tunnel.
+
+Confirmer depuis le contrôleur (l'un des deux petits pings répond, le gros avec
+« interdiction de fragmenter » échoue) :
+
+```powershell
+ping <IP-VPN-hôte>                 # petit paquet : doit répondre
+ping <IP-VPN-hôte> -f -l 1400      # gros paquet, DF : échoue si MTU trop bas
+ping <IP-VPN-hôte> -l 1400         # gros paquet fragmenté : répond
+```
+
+Correctif : réduire le MTU WireGuard sur les **deux** configs (`[Interface]`) :
+
+```ini
+[Interface]
+MTU = 1380      # descendre à 1280 si nécessaire (4G, PPPoE, double tunnel…)
+```
+
+Depuis la 0.1.1, la vraie cause de coupure est remontée jusqu'à l'UI
+(« Session terminée : réception interrompue : … ») et la connexion applique un
+délai maximal au lieu de bloquer indéfiniment.
+
+### « Aucun hôte ne correspond à ce code »
+
+- Vérifier que les deux machines sont bien sur le VPN et se pinguent.
+- Si l'interface WireGuard du contrôleur est en `/32`, le balayage ne couvre que
+  sa propre adresse : forcer le sous-réseau (ex. `10.0.0.0/24`) dans le champ
+  *Sous-réseau* de la GUI ou en argument de la CLI.
+
 ## État
 
 Tous les composants sont implémentés. La chaîne complète est testée sous Linux
