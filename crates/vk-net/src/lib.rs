@@ -5,7 +5,7 @@
 //! - [`transport`] : flux chiffré de bout en bout ([`transport::EncryptedStream`])
 //!   au-dessus d'une connexion TCP, avec pilotage du handshake Noise et
 //!   fragmentation transparente des gros messages.
-//! - [`discovery`] : énumération des interfaces, calcul du sous-réseau VPN et
+//! - [`discovery`] : énumération des interfaces, calcul du sous-réseau local et
 //!   balayage parallèle à la recherche de l'hôte affichant un code donné.
 
 pub mod discovery;

@@ -1,6 +1,6 @@
-//! Découverte de l'hôte sur le VPN.
+//! Découverte de l'hôte sur le réseau local.
 //!
-//! mDNS/broadcast ne traversant généralement pas un VPN niveau 3, on procède par
+//! Plutôt que de dépendre du mDNS/broadcast (souvent filtré), on procède par
 //! **balayage** du sous-réseau : pour chaque adresse, on tente une connexion TCP
 //! courte et on envoie une sonde `Probe { code }`. L'hôte qui correspond répond
 //! `ProbeResult { matches: true }`.
@@ -49,22 +49,14 @@ pub fn list_ipv4_interfaces() -> Vec<InterfaceV4> {
     out
 }
 
-/// Tente de deviner l'interface du VPN WireGuard.
+/// Tente de deviner l'interface du réseau local à utiliser pour la découverte.
 ///
-/// Heuristique : d'abord par nom (`wg*`, `wireguard`, `wintun` côté Windows),
-/// puis repli sur la première interface en adresse privée qui n'est pas un pont
-/// Docker/conteneur.
-pub fn guess_wireguard_interface() -> Option<InterfaceV4> {
-    let ifaces = list_ipv4_interfaces();
-
-    if let Some(found) = ifaces.iter().find(|i| {
-        let n = i.name.to_lowercase();
-        n.starts_with("wg") || n.contains("wireguard") || n.contains("wintun")
-    }) {
-        return Some(found.clone());
-    }
-
-    ifaces.into_iter().find(|i| {
+/// Heuristique : la première interface en adresse IPv4 **privée** qui n'est pas
+/// une interface de conteneur (Docker, ponts virtuels). Sur une machine à
+/// plusieurs cartes, le sous-réseau peut toujours être forcé explicitement côté
+/// contrôleur.
+pub fn guess_lan_interface() -> Option<InterfaceV4> {
+    list_ipv4_interfaces().into_iter().find(|i| {
         i.ip.is_private()
             && !i.name.starts_with("docker")
             && !i.name.starts_with("br-")

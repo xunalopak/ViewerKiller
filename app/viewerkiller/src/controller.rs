@@ -1,5 +1,5 @@
-//! Côté contrôleur : découverte de l'hôte sur le VPN, handshake, puis pont
-//! entre la session chiffrée et l'interface via des canaux.
+//! Côté contrôleur : découverte de l'hôte sur le réseau local, handshake, puis
+//! pont entre la session chiffrée et l'interface via des canaux.
 
 use std::net::{Ipv4Addr, SocketAddr};
 use std::time::Duration;
@@ -12,7 +12,7 @@ use vk_core::crypto::derive_psk;
 use vk_core::protocol::{
     ControllerMessage, DiscoveryMessage, FrameUpdate, HostMessage, InputEvent, PROTO_VERSION,
 };
-use vk_net::discovery::{find_host_by_code, guess_wireguard_interface, hosts_in_subnet};
+use vk_net::discovery::{find_host_by_code, guess_lan_interface, hosts_in_subnet};
 use vk_net::frame::{read_framed, write_framed};
 use vk_net::transport::EncryptedStream;
 
@@ -37,10 +37,10 @@ pub enum SessionEvent {
 /// Délai maximal pour établir une session (connexion TCP + sonde + handshake).
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Découvre l'hôte affichant le code sur le VPN, puis établit la session.
+/// Découvre l'hôte affichant le code sur le réseau local, puis établit la session.
 ///
 /// `subnet` permet de forcer un sous-réseau ; sinon il est déduit de
-/// l'interface VPN détectée.
+/// l'interface réseau locale détectée.
 pub async fn discover_and_connect(
     subnet: Option<(Ipv4Addr, u8)>,
     config: &ControllerConfig,
@@ -49,9 +49,9 @@ pub async fn discover_and_connect(
     let (ip, prefix) = match subnet {
         Some(s) => s,
         None => {
-            let iface = guess_wireguard_interface()
-                .context("aucune interface VPN détectée ; précisez le sous-réseau")?;
-            tracing::info!(name = %iface.name, ip = %iface.ip, prefix = iface.prefix, "interface VPN");
+            let iface = guess_lan_interface()
+                .context("aucune interface réseau locale détectée ; précisez le sous-réseau")?;
+            tracing::info!(name = %iface.name, ip = %iface.ip, prefix = iface.prefix, "interface réseau locale");
             (iface.ip, iface.prefix)
         }
     };
@@ -66,7 +66,7 @@ pub async fn discover_and_connect(
         128,
     )
     .await
-    .context("aucun hôte ne correspond à ce code sur le VPN")?;
+    .context("aucun hôte ne correspond à ce code sur le réseau local")?;
     tracing::info!(%addr, "hôte trouvé");
     connect_to(addr, config).await
 }
@@ -103,7 +103,7 @@ pub async fn connect_to(
             .context("handshake Noise (mot de passe incorrect ?)")
     })
     .await
-    .context("délai de connexion dépassé (hôte injoignable ou tunnel VPN saturé ?)")?
+    .context("délai de connexion dépassé (hôte injoignable ou réseau saturé ?)")?
 }
 
 /// Boucle de session : reçoit les trames (vers `events_tx`) et envoie les

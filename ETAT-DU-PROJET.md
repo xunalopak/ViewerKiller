@@ -1,17 +1,17 @@
 # ViewerKiller — état du projet (note de reprise)
 
-> Alternative à TeamViewer, **plus sécurisée**, pour machines reliées par un VPN
-> WireGuard. Aucun port exposé vers Internet (l'agent n'écoute que sur l'IP VPN),
-> chiffrement bout-en-bout (Noise) par-dessus le VPN, code de connexion + mot de
-> passe, découverte par balayage du sous-réseau.
+> Alternative à TeamViewer, **plus sécurisée**, pour machines d'un **même réseau
+> local (usage interne)**. L'agent n'écoute que sur son IP LAN, chiffrement
+> bout-en-bout (Noise) code de connexion + mot de passe, découverte par balayage
+> du sous-réseau.
 
-Dernière mise à jour : **2026-07-01** (v0.1.1). Plan détaillé :
+Dernière mise à jour : **2026-07-01** (v0.1.2). Plan détaillé :
 `~/.claude/plans/j-aimerai-construire-une-alternative-peaceful-castle.md`.
 
 ## Décisions verrouillées
 - Cible **Windows** (hôte + contrôleur). Cœur en **Rust**.
-- Connectivité : IP du **VPN WireGuard**, **sans serveur** ; agent lié à
-  l'interface VPN uniquement.
+- Connectivité : **réseau local**, **sans serveur** ; agent lié à l'interface
+  LAN uniquement (usage interne).
 - Code de connexion **arbitraire** + **balayage** du sous-réseau.
 - MVP : écran + clavier/souris + chiffrement E2E (code + mot de passe).
 - Env. de dev = **Linux** ; capture/injection natives = **Windows** → isolées
@@ -20,7 +20,7 @@ Dernière mise à jour : **2026-07-01** (v0.1.1). Plan détaillé :
 ## Avancement par jalon
 - [x] **J1 — Squelette + protocole + cadrage** (`crates/vk-core`) — testé.
 - [x] **J2 — Crypto Noise NNpsk0 + dérivation PSK** (`crates/vk-core/crypto.rs`) — testé.
-- [x] **J3 — Transport TCP chiffré + découverte VPN** (`crates/vk-net`) — testé.
+- [x] **J3 — Transport TCP chiffré + découverte LAN** (`crates/vk-net`) — testé.
 - [x] **J4a — Encodage/diff par tuiles (portable)** (`crates/vk-media`) — testé.
 - [x] **J4b — Capture écran Windows** — `WindowsCapturer` via **GDI BitBlt**
       (crate `windows`) dans `crates/vk-platform/src/windows.rs`.
@@ -55,7 +55,7 @@ app/viewerkiller/    lib : host.rs, controller.rs, security.rs
 > `multi_thread` pour éviter la starvation.
 
 ## Format réseau (rappel)
-1. Découverte (en clair, dans le tunnel VPN) : `DiscoveryMessage::Probe{code}` →
+1. Découverte (en clair, sur le réseau local) : `DiscoveryMessage::Probe{code}` →
    `ProbeResult{matches}` — cadrage u32 + postcard (`vk_core::codec`).
 2. Handshake Noise `NNpsk0` (PSK = `blake3::derive_key(password)`), enregistrements
    `[u16 len][texte chiffré]`.
@@ -79,26 +79,34 @@ cargo run -p viewerkiller -- connect <code> <mot_de_passe> [ip/prefixe]
 Tous les jalons sont codés et vérifiés (tests Linux + cross-check Windows). Reste
 la **validation runtime** et la perf :
 1. **Test runtime sur Windows** — `cargo run --bin viewerkiller-gui` (ou la CLI)
-   sur deux machines du même VPN WireGuard. L'hôte affiche le code+mdp ; le
+   sur deux machines du même réseau local. L'hôte affiche le code+mdp ; le
    contrôleur saisit code+mdp → écran distant + contrôle. Points à valider en
    conditions réelles : capture GDI (couleurs BGRA, stride), `SendInput` (coords
-   absolues, molette), détection de l'interface WireGuard (`guess_wireguard_interface`).
-2. **Sécurité réseau** — depuis un hôte **hors-VPN**, vérifier que le port 47600
-   est **injoignable** (`Test-NetConnection <ip-vpn> -Port 47600`).
-3. **Perf** — encoder dans un `spawn_blocking` (l'encode JPEG est synchrone) ;
+   absolues, molette), détection de l'interface LAN (`guess_lan_interface`).
+2. **Perf** — encoder dans un `spawn_blocking` (l'encode JPEG est synchrone) ;
    envisager DXGI Desktop Duplication + un codec vidéo (H.264/VP9) pour le plein
    écran fluide ; tuiles natives « dirty rects ».
 
-## Diagnostic réseau (v0.1.1)
-- Panne observée sur VPN réel : hôte « session établie » mais contrôleur
-  « session terminée » dès la 1re image = **trou noir MTU** WireGuard (petits
-  paquets OK, gros paquets perdus). Fix = terrain, pas code : `MTU = 1380`
-  (voire 1280) dans les deux configs WireGuard. Voir la section *Dépannage* du
-  README.
-- Côté code (0.1.1) : `SessionEvent::Disconnected` porte désormais une
-  `Option<String>` (raison) affichée dans l'UI/CLI ; `connect_to` a un
-  `CONNECT_TIMEOUT` (10 s) ; un échec d'envoi d'entrée ne laisse plus l'UI sans
-  événement de fin.
+## Bascule « usage interne » (v0.1.2)
+- Le cadrage **VPN WireGuard a été retiré** : l'appli cible désormais le
+  **réseau local**. `guess_wireguard_interface` → `guess_lan_interface` (première
+  IPv4 privée hors docker/veth/br-). Chiffrement E2E (code + mot de passe +
+  Noise) **conservé** : c'est la sécurité sur le LAN.
+- Reste à trancher (pas encore fait) : sur une machine multi-cartes, l'hôte se
+  lie à **une** interface détectée ; prévoir un sélecteur d'interface côté hôte
+  si besoin (le contrôleur peut déjà forcer le sous-réseau).
+
+## Diagnostic réseau (historique)
+- Panne réelle observée (VM ↔ hôte, VirtualBox Host-Only 192.168.56.x) :
+  handshake OK puis **`decrypt error`** au 1er message de session. Handshake OK ⇒
+  mots de passe identiques ⇒ clés de transport identiques ⇒ le ciphertext arrive
+  **corrompu**. Cause probable : **déchargement TCP (LSO/checksum offload)** de la
+  carte virtuelle qui abîme la 1re grosse image. Fix terrain : `Disable-NetAdapterLso`
+  / `Disable-NetAdapterChecksumOffload` des deux côtés. (L'hypothèse MTU initiale
+  était **fausse** : symptôme = decrypt error, pas coupure silencieuse.)
+- Côté code (0.1.1) : `SessionEvent::Disconnected` porte une `Option<String>`
+  (raison) affichée dans l'UI/CLI ; `connect_to` a un `CONNECT_TIMEOUT` (10 s) ;
+  un échec d'envoi d'entrée ne laisse plus l'UI sans événement de fin.
 
 ## Pièges connus / notes
 - `TileCodec` a été renommé `ZstdRgba` → `DeflateBgra` (deflate pur Rust, pas de

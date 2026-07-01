@@ -7,9 +7,9 @@
 //! échouer le handshake (échec de vérification du tag AEAD), donc aucune session
 //! ne s'établit et un homme du milieu sans le mot de passe est exclu.
 //!
-//! Ce chiffrement de bout en bout s'ajoute au tunnel VPN (défense en
-//! profondeur) : même un nœud VPN compromis ne voit jamais l'écran ni les
-//! frappes en clair.
+//! Ce chiffrement de bout en bout protège l'écran et les frappes sur le réseau
+//! local : même un autre appareil du LAN qui capterait le trafic ne voit jamais
+//! rien en clair sans le mot de passe.
 
 use snow::params::NoiseParams;
 

@@ -1,9 +1,9 @@
 //! Binaire ViewerKiller (CLI).
 //!
 //! - `viewerkiller host` : démarre l'hôte ; affiche un code + un mot de passe à
-//!   transmettre au contrôleur. Écoute uniquement sur l'interface VPN.
+//!   transmettre au contrôleur. Écoute sur l'interface du réseau local.
 //! - `viewerkiller connect <code> <mot_de_passe> [sous-réseau]` : découvre
-//!   l'hôte sur le VPN et établit la session.
+//!   l'hôte sur le réseau local et établit la session.
 //!
 //! L'interface graphique (rendu de l'écran distant, capture clavier/souris) est
 //! ajoutée au jalon 6 ; cette CLI sert à valider la chaîne réseau de bout en
@@ -55,14 +55,14 @@ async fn main() -> Result<()> {
 }
 
 async fn run_host() -> Result<()> {
-    let iface = vk_net::discovery::guess_wireguard_interface()
-        .context("aucune interface VPN détectée ; ViewerKiller ne s'expose que sur le VPN")?;
+    let iface = vk_net::discovery::guess_lan_interface()
+        .context("aucune interface réseau locale détectée")?;
     let bind_addr = SocketAddr::new(IpAddr::V4(iface.ip), DEFAULT_PORT);
     let (code, password) = generate_credentials();
 
     println!("======================================");
     println!("  ViewerKiller — hôte prêt");
-    println!("  Interface VPN : {} ({})", iface.name, iface.ip);
+    println!("  Interface réseau : {} ({})", iface.name, iface.ip);
     println!("  Code          : {code}");
     println!("  Mot de passe  : {password}");
     println!("======================================");

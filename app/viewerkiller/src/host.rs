@@ -1,4 +1,4 @@
-//! Côté hôte : écoute sur l'interface VPN, répond aux sondes de découverte,
+//! Côté hôte : écoute sur l'interface du réseau local, répond aux sondes de découverte,
 //! établit la session chiffrée, puis diffuse l'écran et injecte les entrées.
 //!
 //! Durcissement intégré : limiteur anti-bruteforce par IP, demande de
@@ -23,7 +23,7 @@ use crate::security::{BruteForceGuard, Consent};
 /// Configuration d'un hôte.
 #[derive(Debug, Clone)]
 pub struct HostConfig {
-    /// Adresse d'écoute — **doit** être l'IP de l'interface VPN (jamais 0.0.0.0).
+    /// Adresse d'écoute — l'IP de l'interface du réseau local à exposer en interne.
     pub bind_addr: SocketAddr,
     pub code: String,
     pub password: String,

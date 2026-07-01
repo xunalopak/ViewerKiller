@@ -7,15 +7,15 @@ pub const PROTO_VERSION: u16 = 1;
 
 /// Port TCP par défaut de l'agent hôte.
 ///
-/// L'agent ne l'écoute QUE sur l'adresse de l'interface VPN — jamais sur
-/// `0.0.0.0` — afin qu'aucun port ne soit exposé vers l'extérieur.
+/// L'agent l'écoute sur l'adresse de l'interface du réseau local, pour un usage
+/// **interne** (LAN) uniquement.
 pub const DEFAULT_PORT: u16 = 47600;
 
-/// Messages échangés AVANT la session chiffrée, pour la découverte sur le VPN.
+/// Messages échangés AVANT la session chiffrée, pour la découverte sur le LAN.
 ///
-/// Ils transitent en clair dans le tunnel VPN (déjà chiffré par WireGuard) ; la
-/// sécurité réelle de la session repose sur le handshake Noise authentifié par
-/// mot de passe qui suit la découverte.
+/// Ils transitent en clair sur le réseau local ; la sécurité réelle de la
+/// session repose sur le handshake Noise authentifié par mot de passe qui suit
+/// la découverte.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DiscoveryMessage {
     /// Contrôleur → agent : « es-tu l'hôte qui affiche ce code ? »

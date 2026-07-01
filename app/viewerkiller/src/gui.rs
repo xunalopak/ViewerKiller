@@ -164,7 +164,7 @@ impl eframe::App for App {
                     ui.vertical_centered(|ui| {
                         ui.add_space(120.0);
                         ui.heading("ViewerKiller");
-                        ui.label("Contrôle à distance sécurisé sur VPN");
+                        ui.label("Contrôle à distance sécurisé sur réseau local");
                         ui.add_space(40.0);
                         if ui.button("🖥  Héberger (être contrôlé)").clicked() {
                             next = Some(start_host(&self.rt));
@@ -183,7 +183,7 @@ impl eframe::App for App {
                         ui.add_space(80.0);
                         ui.heading("Hôte en écoute");
                         ui.add_space(20.0);
-                        ui.label(format!("Interface VPN : {} ({})", host.interface, host.ip));
+                        ui.label(format!("Interface réseau : {} ({})", host.interface, host.ip));
                         ui.add_space(20.0);
                         ui.label(egui::RichText::new("Code").strong());
                         ui.label(egui::RichText::new(&host.code).size(36.0).monospace());
@@ -224,7 +224,7 @@ impl eframe::App for App {
                     ui.add_space(10.0);
                     ui.label(
                         egui::RichText::new(
-                            "Sous-réseau vide = détection auto de l'interface VPN.",
+                            "Sous-réseau vide = détection auto de l'interface réseau locale.",
                         )
                         .weak(),
                     );
@@ -249,7 +249,7 @@ impl eframe::App for App {
                     ui.vertical_centered(|ui| {
                         ui.add_space(160.0);
                         ui.spinner();
-                        ui.label("Recherche de l'hôte sur le VPN…");
+                        ui.label("Recherche de l'hôte sur le réseau local…");
                     });
                 });
                 ctx.request_repaint_after(Duration::from_millis(100));
@@ -392,11 +392,11 @@ fn draw_session(ui: &mut egui::Ui, session: &mut SessionScreen) {
 // --- Démarrage hôte / connexion -------------------------------------------
 
 fn start_host(rt: &tokio::runtime::Runtime) -> Screen {
-    let iface = match vk_net::discovery::guess_wireguard_interface() {
+    let iface = match vk_net::discovery::guess_lan_interface() {
         Some(i) => i,
         None => {
             return Screen::Error(
-                "Aucune interface VPN détectée. ViewerKiller ne s'expose que sur le VPN.".into(),
+                "Aucune interface réseau locale détectée.".into(),
             )
         }
     };
