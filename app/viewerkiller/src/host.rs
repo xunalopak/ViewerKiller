@@ -1,5 +1,6 @@
-//! Côté hôte : écoute sur l'interface VPN, répond aux sondes de découverte,
-//! établit la session chiffrée, puis diffuse l'écran et injecte les entrées.
+//! Côté hôte : écoute sur l'adresse configurée, répond aux sondes de
+//! vérification de code, établit la session chiffrée, puis diffuse l'écran et
+//! injecte les entrées.
 //!
 //! Durcissement intégré : limiteur anti-bruteforce par IP, demande de
 //! consentement après authentification, et journal d'audit (cible `audit`).
@@ -23,7 +24,7 @@ use crate::security::{BruteForceGuard, Consent};
 /// Configuration d'un hôte.
 #[derive(Debug, Clone)]
 pub struct HostConfig {
-    /// Adresse d'écoute — **doit** être l'IP de l'interface VPN (jamais 0.0.0.0).
+    /// Adresse d'écoute.
     pub bind_addr: SocketAddr,
     pub code: String,
     pub password: String,

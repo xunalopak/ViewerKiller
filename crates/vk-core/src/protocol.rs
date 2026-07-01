@@ -6,16 +6,13 @@ use serde::{Deserialize, Serialize};
 pub const PROTO_VERSION: u16 = 1;
 
 /// Port TCP par défaut de l'agent hôte.
-///
-/// L'agent ne l'écoute QUE sur l'adresse de l'interface VPN — jamais sur
-/// `0.0.0.0` — afin qu'aucun port ne soit exposé vers l'extérieur.
 pub const DEFAULT_PORT: u16 = 47600;
 
-/// Messages échangés AVANT la session chiffrée, pour la découverte sur le VPN.
+/// Messages échangés AVANT la session chiffrée, pour la vérification du code
+/// de connexion.
 ///
-/// Ils transitent en clair dans le tunnel VPN (déjà chiffré par WireGuard) ; la
-/// sécurité réelle de la session repose sur le handshake Noise authentifié par
-/// mot de passe qui suit la découverte.
+/// Ils transitent en clair sur le réseau ; la sécurité réelle de la session
+/// repose sur le handshake Noise authentifié par mot de passe qui suit.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DiscoveryMessage {
     /// Contrôleur → agent : « es-tu l'hôte qui affiche ce code ? »

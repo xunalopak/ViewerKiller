@@ -1,8 +1,7 @@
-//! Côté contrôleur : découverte de l'hôte sur le VPN, handshake, puis pont
-//! entre la session chiffrée et l'interface via des canaux.
+//! Côté contrôleur : connexion directe à l'hôte, handshake, puis pont entre la
+//! session chiffrée et l'interface via des canaux.
 
-use std::net::{Ipv4Addr, SocketAddr};
-use std::time::Duration;
+use std::net::SocketAddr;
 
 use anyhow::{Context, Result};
 use tokio::net::TcpStream;
@@ -12,7 +11,6 @@ use vk_core::crypto::derive_psk;
 use vk_core::protocol::{
     ControllerMessage, DiscoveryMessage, FrameUpdate, HostMessage, InputEvent, PROTO_VERSION,
 };
-use vk_net::discovery::{find_host_by_code, guess_wireguard_interface, hosts_in_subnet};
 use vk_net::frame::{read_framed, write_framed};
 use vk_net::transport::EncryptedStream;
 
@@ -32,42 +30,8 @@ pub enum SessionEvent {
     Disconnected,
 }
 
-/// Découvre l'hôte affichant le code sur le VPN, puis établit la session.
-///
-/// `subnet` permet de forcer un sous-réseau ; sinon il est déduit de
-/// l'interface VPN détectée.
-pub async fn discover_and_connect(
-    subnet: Option<(Ipv4Addr, u8)>,
-    config: &ControllerConfig,
-    per_host_timeout: Duration,
-) -> Result<EncryptedStream<TcpStream>> {
-    let (ip, prefix) = match subnet {
-        Some(s) => s,
-        None => {
-            let iface = guess_wireguard_interface()
-                .context("aucune interface VPN détectée ; précisez le sous-réseau")?;
-            tracing::info!(name = %iface.name, ip = %iface.ip, prefix = iface.prefix, "interface VPN");
-            (iface.ip, iface.prefix)
-        }
-    };
-
-    let hosts = hosts_in_subnet(ip, prefix);
-    tracing::info!(count = hosts.len(), "balayage du sous-réseau");
-    let addr = find_host_by_code(
-        hosts,
-        config.port,
-        config.code.clone(),
-        per_host_timeout,
-        128,
-    )
-    .await
-    .context("aucun hôte ne correspond à ce code sur le VPN")?;
-    tracing::info!(%addr, "hôte trouvé");
-    connect_to(addr, config).await
-}
-
-/// Se connecte directement à une adresse connue (utilisé après découverte, ou
-/// en tests).
+/// Se connecte directement à une adresse connue (l'hôte doit déjà écouter et
+/// attendre la connexion).
 pub async fn connect_to(
     addr: SocketAddr,
     config: &ControllerConfig,

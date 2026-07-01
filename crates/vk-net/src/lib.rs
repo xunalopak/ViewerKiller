@@ -1,14 +1,11 @@
 //! Couche réseau de ViewerKiller (asynchrone, tokio).
 //!
 //! - [`frame`] : lecture/écriture d'un message unique cadré (en clair), utilisé
-//!   pour la phase de découverte.
+//!   pour la phase d'authentification par code.
 //! - [`transport`] : flux chiffré de bout en bout ([`transport::EncryptedStream`])
 //!   au-dessus d'une connexion TCP, avec pilotage du handshake Noise et
 //!   fragmentation transparente des gros messages.
-//! - [`discovery`] : énumération des interfaces, calcul du sous-réseau VPN et
-//!   balayage parallèle à la recherche de l'hôte affichant un code donné.
 
-pub mod discovery;
 pub mod frame;
 pub mod transport;
 

@@ -1,8 +1,8 @@
 //! Lecture/écriture asynchrone d'un message unique cadré par préfixe de
 //! longueur u32 (big-endian), **en clair**.
 //!
-//! Utilisé pour la phase de découverte (sondes `Probe`/`ProbeResult`), qui
-//! précède le handshake chiffré. Le contenu transite dans le tunnel VPN.
+//! Utilisé pour la phase d'authentification par code (sondes
+//! `Probe`/`ProbeResult`), qui précède le handshake chiffré.
 
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};

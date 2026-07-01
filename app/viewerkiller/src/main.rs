@@ -1,9 +1,10 @@
 //! Binaire ViewerKiller (CLI).
 //!
-//! - `viewerkiller host` : démarre l'hôte ; affiche un code + un mot de passe à
-//!   transmettre au contrôleur. Écoute uniquement sur l'interface VPN.
-//! - `viewerkiller connect <code> <mot_de_passe> [sous-réseau]` : découvre
-//!   l'hôte sur le VPN et établit la session.
+//! - `viewerkiller host [ip[:port]]` : démarre l'hôte ; affiche un code + un
+//!   mot de passe à transmettre au contrôleur, puis attend une connexion
+//!   entrante.
+//! - `viewerkiller connect <code> <mot_de_passe> <ip[:port]>` : se connecte
+//!   directement à l'hôte qui attend à cette adresse et établit la session.
 //!
 //! L'interface graphique (rendu de l'écran distant, capture clavier/souris) est
 //! ajoutée au jalon 6 ; cette CLI sert à valider la chaîne réseau de bout en
@@ -16,8 +17,8 @@ use anyhow::{Context, Result};
 use tokio::sync::mpsc;
 
 use viewerkiller::{
-    controller_session, generate_credentials, serve, AutoAccept, BruteForceGuard, ControllerConfig,
-    HostConfig, SessionEvent,
+    controller::connect_to, controller_session, generate_credentials, serve, AutoAccept,
+    BruteForceGuard, ControllerConfig, HostConfig, SessionEvent,
 };
 use vk_core::protocol::DEFAULT_PORT;
 use vk_media::FrameBuffer;
@@ -36,33 +37,40 @@ async fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
     match args.get(1).map(String::as_str) {
-        Some("host") => run_host().await,
+        Some("host") => {
+            let bind_addr = args
+                .get(2)
+                .map(|s| parse_addr(s, DEFAULT_PORT))
+                .transpose()?
+                .unwrap_or_else(|| SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), DEFAULT_PORT));
+            run_host(bind_addr).await
+        }
         Some("connect") => {
             let code = args
                 .get(2)
-                .context("usage : viewerkiller connect <code> <mot_de_passe> [sous-réseau]")?;
+                .context("usage : viewerkiller connect <code> <mot_de_passe> <ip[:port]>")?;
             let password = args.get(3).context("mot de passe manquant")?;
-            let subnet = args.get(4).map(|s| parse_subnet(s)).transpose()?;
-            run_connect(code.clone(), password.clone(), subnet).await
+            let addr = args
+                .get(4)
+                .context("adresse manquante (ip ou ip:port de l'hôte)")
+                .and_then(|s| parse_addr(s, DEFAULT_PORT))?;
+            run_connect(code.clone(), password.clone(), addr).await
         }
         _ => {
             eprintln!("Usage :");
-            eprintln!("  viewerkiller host");
-            eprintln!("  viewerkiller connect <code> <mot_de_passe> [ip/prefixe]");
+            eprintln!("  viewerkiller host [ip[:port]]");
+            eprintln!("  viewerkiller connect <code> <mot_de_passe> <ip[:port]>");
             std::process::exit(2);
         }
     }
 }
 
-async fn run_host() -> Result<()> {
-    let iface = vk_net::discovery::guess_wireguard_interface()
-        .context("aucune interface VPN détectée ; ViewerKiller ne s'expose que sur le VPN")?;
-    let bind_addr = SocketAddr::new(IpAddr::V4(iface.ip), DEFAULT_PORT);
+async fn run_host(bind_addr: SocketAddr) -> Result<()> {
     let (code, password) = generate_credentials();
 
     println!("======================================");
     println!("  ViewerKiller — hôte prêt");
-    println!("  Interface VPN : {} ({})", iface.name, iface.ip);
+    println!("  Écoute        : {bind_addr}");
     println!("  Code          : {code}");
     println!("  Mot de passe  : {password}");
     println!("======================================");
@@ -92,15 +100,13 @@ async fn run_host() -> Result<()> {
     .await
 }
 
-async fn run_connect(code: String, password: String, subnet: Option<(Ipv4Addr, u8)>) -> Result<()> {
+async fn run_connect(code: String, password: String, addr: SocketAddr) -> Result<()> {
     let config = ControllerConfig {
         code,
         password,
-        port: DEFAULT_PORT,
+        port: addr.port(),
     };
-    let enc =
-        viewerkiller::controller::discover_and_connect(subnet, &config, Duration::from_millis(400))
-            .await?;
+    let enc = connect_to(addr, &config).await?;
 
     let (events_tx, mut events_rx) = mpsc::unbounded_channel();
     let (_input_tx, input_rx) = mpsc::unbounded_channel();
@@ -133,11 +139,15 @@ async fn run_connect(code: String, password: String, subnet: Option<(Ipv4Addr, u
     Ok(())
 }
 
-fn parse_subnet(s: &str) -> Result<(Ipv4Addr, u8)> {
-    let (ip, prefix) = s
-        .split_once('/')
-        .context("format attendu : ip/prefixe (ex. 10.0.0.0/24)")?;
-    Ok((ip.parse()?, prefix.parse()?))
+/// Parse `ip` ou `ip:port` ; utilise `default_port` si le port est omis.
+fn parse_addr(s: &str, default_port: u16) -> Result<SocketAddr> {
+    if let Ok(addr) = s.parse::<SocketAddr>() {
+        return Ok(addr);
+    }
+    let ip: IpAddr = s
+        .parse()
+        .context("format attendu : ip ou ip:port (ex. 10.0.0.5 ou 10.0.0.5:47600)")?;
+    Ok(SocketAddr::new(ip, default_port))
 }
 
 fn hostname() -> String {

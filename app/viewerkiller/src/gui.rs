@@ -12,7 +12,7 @@ use std::time::Duration;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 use viewerkiller::{
-    controller::discover_and_connect, controller_session, generate_credentials, serve, AutoAccept,
+    controller::connect_to, controller_session, generate_credentials, serve, AutoAccept,
     BruteForceGuard, ControllerConfig, HostConfig, SessionEvent,
 };
 use vk_core::protocol::{InputEvent, MouseButton, DEFAULT_PORT};
@@ -64,8 +64,7 @@ impl App {
 struct HostScreen {
     code: String,
     password: String,
-    interface: String,
-    ip: Ipv4Addr,
+    bind_addr: SocketAddr,
 }
 
 // --- Formulaire de connexion ----------------------------------------------
@@ -74,7 +73,7 @@ struct HostScreen {
 struct ConnectForm {
     code: String,
     password: String,
-    subnet: String,
+    address: String,
 }
 
 // --- Session contrôleur ----------------------------------------------------
@@ -159,7 +158,7 @@ impl eframe::App for App {
                     ui.vertical_centered(|ui| {
                         ui.add_space(120.0);
                         ui.heading("ViewerKiller");
-                        ui.label("Contrôle à distance sécurisé sur VPN");
+                        ui.label("Contrôle à distance sécurisé, chiffré de bout en bout");
                         ui.add_space(40.0);
                         if ui.button("🖥  Héberger (être contrôlé)").clicked() {
                             next = Some(start_host(&self.rt));
@@ -178,7 +177,7 @@ impl eframe::App for App {
                         ui.add_space(80.0);
                         ui.heading("Hôte en écoute");
                         ui.add_space(20.0);
-                        ui.label(format!("Interface VPN : {} ({})", host.interface, host.ip));
+                        ui.label(format!("Écoute sur : {}", host.bind_addr));
                         ui.add_space(20.0);
                         ui.label(egui::RichText::new("Code").strong());
                         ui.label(egui::RichText::new(&host.code).size(36.0).monospace());
@@ -212,14 +211,14 @@ impl eframe::App for App {
                             ui.label("Mot de passe");
                             ui.add(egui::TextEdit::singleline(&mut form.password).password(true));
                             ui.end_row();
-                            ui.label("Sous-réseau (option.)");
-                            ui.text_edit_singleline(&mut form.subnet);
+                            ui.label("Adresse de l'hôte");
+                            ui.text_edit_singleline(&mut form.address);
                             ui.end_row();
                         });
                     ui.add_space(10.0);
                     ui.label(
                         egui::RichText::new(
-                            "Sous-réseau vide = détection auto de l'interface VPN.",
+                            "Adresse IP (et port optionnel) de la machine à contrôler, ex. 10.0.0.5 ou 10.0.0.5:47600.",
                         )
                         .weak(),
                     );
@@ -244,7 +243,7 @@ impl eframe::App for App {
                     ui.vertical_centered(|ui| {
                         ui.add_space(160.0);
                         ui.spinner();
-                        ui.label("Recherche de l'hôte sur le VPN…");
+                        ui.label("Connexion à l'hôte…");
                     });
                 });
                 ctx.request_repaint_after(Duration::from_millis(100));
@@ -383,17 +382,10 @@ fn draw_session(ui: &mut egui::Ui, session: &mut SessionScreen) {
 // --- Démarrage hôte / connexion -------------------------------------------
 
 fn start_host(rt: &tokio::runtime::Runtime) -> Screen {
-    let iface = match vk_net::discovery::guess_wireguard_interface() {
-        Some(i) => i,
-        None => {
-            return Screen::Error(
-                "Aucune interface VPN détectée. ViewerKiller ne s'expose que sur le VPN.".into(),
-            )
-        }
-    };
+    let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), DEFAULT_PORT);
     let (code, password) = generate_credentials();
     let config = HostConfig {
-        bind_addr: SocketAddr::new(IpAddr::V4(iface.ip), DEFAULT_PORT),
+        bind_addr,
         code: code.clone(),
         password: password.clone(),
         host_name: hostname(),
@@ -424,8 +416,7 @@ fn start_host(rt: &tokio::runtime::Runtime) -> Screen {
     Screen::Host(HostScreen {
         code,
         password,
-        interface: iface.name,
-        ip: iface.ip,
+        bind_addr,
     })
 }
 
@@ -450,22 +441,18 @@ fn start_connect(rt: &tokio::runtime::Runtime, form: &ConnectForm) -> Result<Scr
     if form.code.trim().is_empty() || form.password.is_empty() {
         return Err("Code et mot de passe requis.".into());
     }
-    let subnet = if form.subnet.trim().is_empty() {
-        None
-    } else {
-        Some(parse_subnet(form.subnet.trim()).map_err(|e| e.to_string())?)
-    };
+    let addr = parse_addr(form.address.trim()).map_err(|e| e.to_string())?;
     let config = ControllerConfig {
         code: form.code.trim().to_string(),
         password: form.password.clone(),
-        port: DEFAULT_PORT,
+        port: addr.port(),
     };
 
     let (tx, rx) = std_mpsc::channel();
     *CONNECT_RX.lock().unwrap() = Some(rx);
 
     rt.spawn(async move {
-        match discover_and_connect(subnet, &config, Duration::from_millis(400)).await {
+        match connect_to(addr, &config).await {
             Ok(enc) => {
                 let (events_tx, events_rx) = mpsc::unbounded_channel();
                 let (input_tx, input_rx) = mpsc::unbounded_channel();
@@ -486,11 +473,15 @@ fn start_connect(rt: &tokio::runtime::Runtime, form: &ConnectForm) -> Result<Scr
 
 // --- Utilitaires -----------------------------------------------------------
 
-fn parse_subnet(s: &str) -> anyhow::Result<(Ipv4Addr, u8)> {
-    let (ip, prefix) = s
-        .split_once('/')
-        .ok_or_else(|| anyhow::anyhow!("format attendu : ip/prefixe (ex. 10.0.0.0/24)"))?;
-    Ok((ip.parse()?, prefix.parse()?))
+/// Parse `ip` ou `ip:port` ; utilise [`DEFAULT_PORT`] si le port est omis.
+fn parse_addr(s: &str) -> anyhow::Result<SocketAddr> {
+    if let Ok(addr) = s.parse::<SocketAddr>() {
+        return Ok(addr);
+    }
+    let ip: IpAddr = s
+        .parse()
+        .map_err(|_| anyhow::anyhow!("format attendu : ip ou ip:port (ex. 10.0.0.5)"))?;
+    Ok(SocketAddr::new(ip, DEFAULT_PORT))
 }
 
 fn hostname() -> String {

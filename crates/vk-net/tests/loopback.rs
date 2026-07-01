@@ -1,8 +1,6 @@
-//! Tests d'intégration en boucle locale : sonde de découverte, handshake Noise
-//! sur TCP réel, et échange chiffré avec fragmentation d'un message > 64 KiB.
-
-use std::net::{Ipv4Addr, SocketAddr};
-use std::time::Duration;
+//! Tests d'intégration en boucle locale : sonde de vérification de code,
+//! handshake Noise sur TCP réel, et échange chiffré avec fragmentation d'un
+//! message > 64 KiB.
 
 use tokio::net::{TcpListener, TcpStream};
 
@@ -10,7 +8,6 @@ use vk_core::crypto::derive_psk;
 use vk_core::protocol::{
     ControllerMessage, DiscoveryMessage, FrameUpdate, HostMessage, Tile, TileCodec, PROTO_VERSION,
 };
-use vk_net::discovery::find_host_by_code;
 use vk_net::frame::{read_framed, write_framed};
 use vk_net::transport::EncryptedStream;
 
@@ -106,56 +103,4 @@ async fn probe_then_encrypted_session_round_trip() {
     }
 
     assert_eq!(host.await.unwrap(), 200_000);
-}
-
-#[tokio::test]
-async fn scanner_finds_matching_host_and_rejects_wrong_code() {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
-    let code = "999000".to_string();
-
-    let host_code = code.clone();
-    tokio::spawn(async move {
-        loop {
-            let Ok((mut sock, _)) = listener.accept().await else {
-                break;
-            };
-            let host_code = host_code.clone();
-            tokio::spawn(async move {
-                let Ok(probe) = read_framed::<_, DiscoveryMessage>(&mut sock).await else {
-                    return;
-                };
-                let matches =
-                    matches!(&probe, DiscoveryMessage::Probe { code, .. } if *code == host_code);
-                let _ = write_framed(
-                    &mut sock,
-                    &DiscoveryMessage::ProbeResult {
-                        matches,
-                        host_name: "h".into(),
-                    },
-                )
-                .await;
-            });
-        }
-    });
-
-    let found = find_host_by_code(
-        vec![Ipv4Addr::LOCALHOST],
-        port,
-        code.clone(),
-        Duration::from_millis(500),
-        16,
-    )
-    .await;
-    assert_eq!(found, Some(SocketAddr::from(([127, 0, 0, 1], port))));
-
-    let not_found = find_host_by_code(
-        vec![Ipv4Addr::LOCALHOST],
-        port,
-        "000000".to_string(),
-        Duration::from_millis(500),
-        16,
-    )
-    .await;
-    assert_eq!(not_found, None);
 }
