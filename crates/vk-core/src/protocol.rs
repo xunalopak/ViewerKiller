@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Version du protocole, incrémentée à chaque changement incompatible.
-pub const PROTO_VERSION: u16 = 1;
+pub const PROTO_VERSION: u16 = 2;
 
 /// Port TCP par défaut de l'agent hôte.
 pub const DEFAULT_PORT: u16 = 47600;
@@ -46,9 +46,19 @@ pub enum InputEvent {
         dy: i32,
     },
     /// Touche clavier (code de touche virtuel Windows), pressée ou relâchée.
+    /// Réservé aux touches non imprimables, modificateurs et raccourcis ; le
+    /// texte passe par [`InputEvent::Char`].
     Key {
         key: u32,
         pressed: bool,
+    },
+    /// Caractère de texte (majuscules, accents, symboles…), déjà résolu par la
+    /// disposition clavier du contrôleur. Injecté en Unicode côté hôte.
+    ///
+    /// NB : nouveau variant ajouté **en fin d'enum** — postcard encode le
+    /// discriminant par ordre de déclaration, ne pas réordonner.
+    Char {
+        c: char,
     },
 }
 

@@ -97,6 +97,8 @@ struct SessionScreen {
     dirty: bool,
     primary_down: bool,
     secondary_down: bool,
+    /// Dernier état des modificateurs envoyé à l'hôte (suivi par transitions).
+    mods: egui::Modifiers,
     disconnected: bool,
 }
 
@@ -114,6 +116,7 @@ impl SessionScreen {
             dirty: false,
             primary_down: false,
             secondary_down: false,
+            mods: egui::Modifiers::default(),
             disconnected: false,
         }
     }
@@ -285,6 +288,9 @@ impl eframe::App for App {
                                 ui.label("Connexion établie…");
                             }
                             if ui.button("Déconnecter").clicked() {
+                                // Relâche les modificateurs tenus, sinon l'hôte
+                                // garderait Ctrl/Alt/Shift enfoncés.
+                                send_modifier_transitions(session, egui::Modifiers::default());
                                 next = Some(Screen::Home);
                             }
                         });
@@ -373,15 +379,20 @@ fn draw_session(ui: &mut egui::Ui, session: &mut SessionScreen) {
         }
     }
 
-    // Boutons et molette.
-    let (primary, secondary, scroll, key_events) = ui.input(|i| {
+    // Boutons, molette, clavier.
+    let (primary, secondary, scroll, mods, key_events) = ui.input(|i| {
         (
             i.pointer.primary_down(),
             i.pointer.secondary_down(),
             i.raw_scroll_delta,
+            i.modifiers,
             i.events.clone(),
         )
     });
+
+    // Modificateurs : envoyés par transitions, avant les touches de la frame
+    // (un Ctrl+C fraîchement pressé doit arriver Ctrl d'abord).
+    send_modifier_transitions(session, mods);
 
     if primary != session.primary_down {
         session.primary_down = primary;
@@ -404,14 +415,85 @@ fn draw_session(ui: &mut egui::Ui, session: &mut SessionScreen) {
         });
     }
 
-    // Clavier.
+    // Clavier : le texte passe par `Event::Text` (majuscules, accents, AltGr,
+    // disposition résolue côté contrôleur → injection Unicode côté hôte) ; les
+    // `Event::Key` ne sont envoyés en VK que pour les touches non imprimables
+    // et les raccourcis Ctrl/Alt, sinon Espace et lettres seraient doublés.
     for event in key_events {
-        if let egui::Event::Key { key, pressed, .. } = event {
-            if let Some(vk) = egui_key_to_vk(key) {
-                let _ = session.input_tx.send(InputEvent::Key { key: vk, pressed });
+        match event {
+            egui::Event::Text(text) => {
+                for c in text.chars() {
+                    let _ = session.input_tx.send(InputEvent::Char { c });
+                }
             }
+            egui::Event::Key { key, pressed, modifiers, .. } => {
+                // AltGr = Ctrl+Alt : le caractère composé arrive via `Text`.
+                let altgr = modifiers.ctrl && modifiers.alt;
+                let shortcut = (modifiers.ctrl || modifiers.alt) && !altgr;
+                if !key_produces_text(key) || shortcut {
+                    if let Some(vk) = egui_key_to_vk(key) {
+                        let _ = session.input_tx.send(InputEvent::Key { key: vk, pressed });
+                    }
+                }
+            }
+            _ => {}
         }
     }
+}
+
+// Codes de touches virtuelles Windows des modificateurs.
+const VK_SHIFT: u32 = 0x10;
+const VK_CONTROL: u32 = 0x11;
+const VK_MENU: u32 = 0x12; // Alt
+
+/// Envoie les changements d'état des modificateurs depuis la dernière frame.
+fn send_modifier_transitions(session: &mut SessionScreen, mods: egui::Modifiers) {
+    let prev = session.mods;
+    for (was, is, vk) in [
+        (prev.shift, mods.shift, VK_SHIFT),
+        (prev.ctrl, mods.ctrl, VK_CONTROL),
+        (prev.alt, mods.alt, VK_MENU),
+    ] {
+        if was != is {
+            let _ = session.input_tx.send(InputEvent::Key { key: vk, pressed: is });
+        }
+    }
+    session.mods = mods;
+}
+
+/// Touches dont la frappe produit du texte (acheminé par `Event::Text`) : on
+/// ne les envoie en VK que pour les raccourcis Ctrl/Alt.
+fn key_produces_text(key: egui::Key) -> bool {
+    use egui::Key::*;
+    !matches!(
+        key,
+        Enter
+            | Tab
+            | Backspace
+            | Escape
+            | Delete
+            | Insert
+            | Home
+            | End
+            | PageUp
+            | PageDown
+            | ArrowLeft
+            | ArrowRight
+            | ArrowUp
+            | ArrowDown
+            | F1
+            | F2
+            | F3
+            | F4
+            | F5
+            | F6
+            | F7
+            | F8
+            | F9
+            | F10
+            | F11
+            | F12
+    )
 }
 
 // --- Démarrage hôte / connexion -------------------------------------------

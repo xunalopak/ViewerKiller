@@ -69,7 +69,7 @@ app/viewerkiller/    lib : host.rs, controller.rs, security.rs
 
 ## Build & test
 ```bash
-cargo test --workspace      # 22 tests, tous verts sur Linux
+cargo test --workspace      # 23 tests, tous verts sur Linux
 cargo build --workspace
 # Vérif du code Windows (#[cfg(windows)]) sans machine Windows, type-check seul :
 rustup target add x86_64-pc-windows-gnu
@@ -94,6 +94,10 @@ et la perf :
    écran fluide ; tuiles natives « dirty rects ».
 
 ## Pièges connus / notes
+- **PROTO_VERSION = 2** depuis v0.1.5 (ajout d'`InputEvent::Char` pour le texte
+  Unicode, jalon J8) : les deux machines doivent exécuter la même version. Les
+  nouveaux variants d'`InputEvent` s'ajoutent **en fin d'enum** (postcard
+  encode le discriminant par ordre de déclaration).
 - `TileCodec` a été renommé `ZstdRgba` → `DeflateBgra` (deflate pur Rust, pas de
   dépendance C). JPEG = chemin par défaut de `TileEncoder`.
 - `snow::Builder::psk()` renvoie `Builder` (pas de `?`).

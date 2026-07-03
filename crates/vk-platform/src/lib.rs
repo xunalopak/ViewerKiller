@@ -37,6 +37,9 @@ pub trait InputInjector: Send {
     fn mouse_button(&mut self, button: MouseButton, pressed: bool) -> anyhow::Result<()>;
     fn mouse_scroll(&mut self, dx: i32, dy: i32) -> anyhow::Result<()>;
     fn key(&mut self, key: u32, pressed: bool) -> anyhow::Result<()>;
+    /// Injecte un caractère de texte (frappe Unicode complète, indépendante de
+    /// la disposition clavier de l'hôte).
+    fn char_input(&mut self, c: char) -> anyhow::Result<()>;
 }
 
 #[cfg(windows)]

@@ -187,5 +187,6 @@ fn apply_input(injector: &mut dyn InputInjector, ev: InputEvent) -> Result<()> {
         InputEvent::MouseButton { button, pressed } => injector.mouse_button(button, pressed),
         InputEvent::MouseScroll { dx, dy } => injector.mouse_scroll(dx, dy),
         InputEvent::Key { key, pressed } => injector.key(key, pressed),
+        InputEvent::Char { c } => injector.char_input(c),
     }
 }

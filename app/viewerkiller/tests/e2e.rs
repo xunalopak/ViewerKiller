@@ -72,6 +72,10 @@ impl InputInjector for RecordingInjector {
             .push(InputEvent::Key { key, pressed });
         Ok(())
     }
+    fn char_input(&mut self, c: char) -> anyhow::Result<()> {
+        self.0.lock().unwrap().push(InputEvent::Char { c });
+        Ok(())
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -148,26 +152,30 @@ async fn full_pipeline_screen_and_input() {
         }
     }
 
-    // 3. Une entrée souris est bien injectée côté hôte (attente active ≤ 2 s).
+    // 3. Une entrée souris et un caractère Unicode sont bien injectés côté
+    //    hôte (attente active ≤ 2 s).
     input_tx
         .send(InputEvent::MouseMove { x: 100, y: 50 })
         .unwrap();
+    input_tx.send(InputEvent::Char { c: 'é' }).unwrap();
     let mut injected = false;
     for _ in 0..40 {
         tokio::time::sleep(Duration::from_millis(50)).await;
-        if recorded
-            .lock()
-            .unwrap()
+        let recorded = recorded.lock().unwrap();
+        let mouse = recorded
             .iter()
-            .any(|e| matches!(e, InputEvent::MouseMove { x: 100, y: 50 }))
-        {
+            .any(|e| matches!(e, InputEvent::MouseMove { x: 100, y: 50 }));
+        let text = recorded
+            .iter()
+            .any(|e| matches!(e, InputEvent::Char { c: 'é' }));
+        if mouse && text {
             injected = true;
             break;
         }
     }
     assert!(
         injected,
-        "entrée non injectée : {:?}",
+        "entrées non injectées : {:?}",
         recorded.lock().unwrap()
     );
 

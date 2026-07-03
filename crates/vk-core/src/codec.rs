@@ -123,6 +123,16 @@ mod tests {
     }
 
     #[test]
+    fn char_event_round_trip() {
+        let msg = ControllerMessage::Input(InputEvent::Char { c: 'é' });
+        let bytes = encode_message(&msg).unwrap();
+        let mut reader = FrameReader::new();
+        reader.feed(&bytes);
+        let payload = reader.next_frame().unwrap().unwrap();
+        assert_eq!(decode_message::<ControllerMessage>(&payload).unwrap(), msg);
+    }
+
+    #[test]
     fn oversize_length_prefix_rejected() {
         let mut reader = FrameReader::new();
         let bogus = ((MAX_FRAME_LEN + 1) as u32).to_be_bytes();

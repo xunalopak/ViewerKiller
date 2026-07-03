@@ -17,9 +17,10 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYBD_EVENT_FLAGS,
-    KEYEVENTF_KEYUP, MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
-    MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN,
-    MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL, MOUSEINPUT, MOUSE_EVENT_FLAGS, VIRTUAL_KEY,
+    KEYEVENTF_KEYUP, KEYEVENTF_UNICODE, MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_LEFTDOWN,
+    MOUSEEVENTF_LEFTUP, MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, MOUSEEVENTF_MOVE,
+    MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL, MOUSEINPUT, MOUSE_EVENT_FLAGS,
+    VIRTUAL_KEY,
 };
 use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
 
@@ -220,6 +221,33 @@ impl InputInjector for WindowsInjector {
         };
         unsafe {
             SendInput(&[input], size_of::<INPUT>() as i32);
+        }
+        Ok(())
+    }
+
+    fn char_input(&mut self, c: char) -> anyhow::Result<()> {
+        // Frappe Unicode : wVk = 0, wScan = unité UTF-16, indépendante de la
+        // disposition clavier de l'hôte. Un codepoint hors BMP produit une
+        // paire de surrogates, soit deux frappes (down+up chacune).
+        let mut units = [0u16; 2];
+        for &unit in c.encode_utf16(&mut units).iter() {
+            for keyup in [KEYBD_EVENT_FLAGS(0), KEYEVENTF_KEYUP] {
+                let input = INPUT {
+                    r#type: INPUT_KEYBOARD,
+                    Anonymous: INPUT_0 {
+                        ki: KEYBDINPUT {
+                            wVk: VIRTUAL_KEY(0),
+                            wScan: unit,
+                            dwFlags: KEYEVENTF_UNICODE | keyup,
+                            time: 0,
+                            dwExtraInfo: 0,
+                        },
+                    },
+                };
+                unsafe {
+                    SendInput(&[input], size_of::<INPUT>() as i32);
+                }
+            }
         }
         Ok(())
     }

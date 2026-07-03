@@ -7,19 +7,21 @@
 Les jalons J1–J7 (MVP complet) sont documentés dans
 [`ETAT-DU-PROJET.md`](ETAT-DU-PROJET.md).
 
-## J8 — Clavier complet
+## J8 — Clavier complet — **fait (v0.1.5)**
 
-Aujourd'hui `egui_key_to_vk` (gui.rs) ignore les modificateurs et il n'y a pas
-d'injection de texte Unicode : pas de majuscules, pas de Ctrl+C, pas d'accents.
+Avant : `egui_key_to_vk` (gui.rs) ignorait les modificateurs et il n'y avait
+pas d'injection de texte Unicode : pas de majuscules, pas de Ctrl+C, pas
+d'accents.
 
-- [ ] `InputEvent::Char { c: char }` (fin d'enum — postcard encode le
+- [x] `InputEvent::Char { c: char }` (fin d'enum — postcard encode le
       discriminant par ordre de déclaration) ; `PROTO_VERSION` → 2.
-- [ ] `InputInjector::char_input` : `SendInput` + `KEYEVENTF_UNICODE`
+- [x] `InputInjector::char_input` : `SendInput` + `KEYEVENTF_UNICODE`
       (paire de surrogates hors BMP) ; stub Linux.
-- [ ] GUI : `egui::Event::Text` → `Char` ; suivi des transitions de
-      modificateurs (VK_SHIFT/CONTROL/MENU/LWIN), relâchés à la déconnexion ;
+- [x] GUI : `egui::Event::Text` → `Char` ; suivi des transitions de
+      modificateurs (VK_SHIFT/CONTROL/MENU), relâchés à la déconnexion ;
       touches imprimables envoyées en VK seulement sous Ctrl/Alt (raccourcis),
-      sauf AltGr (= Ctrl+Alt) qui passe par `Text`.
+      sauf AltGr (= Ctrl+Alt) qui passe par `Text`. (Pas de touche Win : egui
+      ne l'expose pas comme modificateur sous Windows.)
 
 ## J9 — Consentement + indicateur en GUI
 
