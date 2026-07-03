@@ -193,9 +193,7 @@ impl eframe::App for App {
                                 egui::RichText::new("Adresses IP (pour le contrôleur)").strong(),
                             );
                             for (name, ip) in &host.addresses {
-                                ui.label(
-                                    egui::RichText::new(format!("{name} : {ip}")).monospace(),
-                                );
+                                ui.label(egui::RichText::new(format!("{name} : {ip}")).monospace());
                             }
                         }
                         ui.add_space(20.0);
