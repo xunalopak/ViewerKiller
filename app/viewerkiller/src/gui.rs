@@ -1,3 +1,7 @@
+// Pas de console Windows à côté de la fenêtre (les logs tracing deviennent
+// invisibles en GUI ; utiliser la CLI pour diagnostiquer).
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 //! Interface graphique ViewerKiller (egui/eframe).
 //!
 //! Trois écrans : accueil (héberger / se connecter), hôte (affiche le code et le
