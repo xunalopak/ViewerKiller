@@ -45,12 +45,17 @@ mot de passe prenait la main sans que l'hôte ne voie rien.
 - [ ] fps/qualité adaptatifs simples (baisser la cadence quand l'envoi
       précédent n'est pas terminé).
 
-## J11 — Presse-papiers partagé
+## J11 — Presse-papiers partagé — **fait (v0.1.7)**
 
-- [ ] Messages `HostMessage::Clipboard(String)` /
-      `ControllerMessage::Clipboard(String)`.
-- [ ] Crate `arboard` des deux côtés, synchronisation sur changement
-      (sondage ~500 ms).
+Copier/coller bidirectionnel façon RDP : ce qu'on copie d'un côté se colle de
+l'autre.
+
+- [x] Messages `HostMessage::Clipboard(String)` /
+      `ControllerMessage::Clipboard(String)` ; `PROTO_VERSION` → 3.
+- [x] Trait `vk_platform::Clipboard` (impl Windows via `arboard`, stub ailleurs)
+      + helper `ClipboardSync` anti-boucle (sondage 500 ms). Activé par
+      `HostConfig.share_clipboard` (hôte) et le paramètre `share_clipboard` de
+      `controller_session` ; désactivé dans les tests.
 
 ## J12 — Multi-écrans + curseur distant
 

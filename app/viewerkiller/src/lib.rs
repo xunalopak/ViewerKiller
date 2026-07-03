@@ -5,6 +5,7 @@
 //! [`vk_core::protocol::InputEvent`] en entrée), ce qui rend l'ensemble
 //! testable sans affichage ni matériel Windows (voir `tests/e2e.rs`).
 
+pub mod clipboard;
 pub mod controller;
 pub mod host;
 pub mod security;

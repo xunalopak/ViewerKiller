@@ -31,6 +31,14 @@ pub trait ScreenCapturer: Send {
     fn capture(&mut self) -> anyhow::Result<Option<Frame>>;
 }
 
+/// Accès au presse-papiers texte du système (synchronisation façon RDP).
+pub trait Clipboard: Send {
+    /// Texte courant du presse-papiers, ou `None` s'il est vide/indisponible.
+    fn get_text(&mut self) -> Option<String>;
+    /// Remplace le texte du presse-papiers.
+    fn set_text(&mut self, text: &str);
+}
+
 /// Cible d'injection d'événements d'entrée (côté hôte).
 pub trait InputInjector: Send {
     fn mouse_move(&mut self, x: i32, y: i32) -> anyhow::Result<()>;
@@ -69,5 +77,17 @@ pub fn default_injector() -> anyhow::Result<Box<dyn InputInjector>> {
     #[cfg(not(windows))]
     {
         Ok(Box::new(stub::StubInjector))
+    }
+}
+
+/// Construit l'accès presse-papiers adapté à la plateforme courante.
+pub fn default_clipboard() -> Box<dyn Clipboard> {
+    #[cfg(windows)]
+    {
+        Box::new(windows::WindowsClipboard::new())
+    }
+    #[cfg(not(windows))]
+    {
+        Box::new(stub::StubClipboard)
     }
 }

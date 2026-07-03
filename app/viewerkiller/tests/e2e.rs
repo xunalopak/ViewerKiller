@@ -92,6 +92,7 @@ async fn full_pipeline_screen_and_input() {
         quality: 75,
         fps: 60,
         require_consent: false,
+        share_clipboard: false,
     };
 
     let recorded = Arc::new(Mutex::new(Vec::new()));
@@ -130,7 +131,7 @@ async fn full_pipeline_screen_and_input() {
 
     let (events_tx, mut events_rx) = mpsc::unbounded_channel();
     let (input_tx, input_rx) = mpsc::unbounded_channel();
-    let session = tokio::spawn(controller_session(enc, events_tx, input_rx));
+    let session = tokio::spawn(controller_session(enc, events_tx, input_rx, false));
 
     // 1. Géométrie de l'écran.
     let mut fb = match events_rx.recv().await.unwrap() {

@@ -4,7 +4,7 @@
 //! valider la chaîne réseau et le rendu de l'UI sans matériel Windows.
 //! L'injecteur ignore silencieusement les événements.
 
-use crate::{Frame, InputInjector, ScreenCapturer};
+use crate::{Clipboard, Frame, InputInjector, ScreenCapturer};
 use vk_core::protocol::MouseButton;
 
 pub struct StubCapturer {
@@ -64,4 +64,15 @@ impl InputInjector for StubInjector {
     fn char_input(&mut self, _c: char) -> anyhow::Result<()> {
         Ok(())
     }
+}
+
+/// Presse-papiers factice (aucun système de fenêtrage en dev) : ne conserve
+/// rien, ne synchronise rien.
+pub struct StubClipboard;
+
+impl Clipboard for StubClipboard {
+    fn get_text(&mut self) -> Option<String> {
+        None
+    }
+    fn set_text(&mut self, _text: &str) {}
 }

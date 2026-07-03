@@ -93,6 +93,7 @@ async fn run_host(bind_addr: SocketAddr) -> Result<()> {
         quality: vk_media::DEFAULT_QUALITY,
         fps: 15,
         require_consent: false,
+        share_clipboard: true,
     };
 
     let mut make_capturer = || vk_platform::default_capturer();
@@ -119,7 +120,7 @@ async fn run_connect(code: String, password: String, addr: SocketAddr) -> Result
 
     let (events_tx, mut events_rx) = mpsc::unbounded_channel();
     let (_input_tx, input_rx) = mpsc::unbounded_channel();
-    let session = tokio::spawn(controller_session(enc, events_tx, input_rx));
+    let session = tokio::spawn(controller_session(enc, events_tx, input_rx, true));
 
     let mut fb: Option<FrameBuffer> = None;
     let mut frames = 0u64;

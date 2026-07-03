@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Version du protocole, incrémentée à chaque changement incompatible.
-pub const PROTO_VERSION: u16 = 2;
+pub const PROTO_VERSION: u16 = 3;
 
 /// Port TCP par défaut de l'agent hôte.
 pub const DEFAULT_PORT: u16 = 47600;
@@ -97,6 +97,9 @@ pub enum ControllerMessage {
     /// Demande une retransmission complète de l'écran (ex. après resize).
     RequestFullFrame,
     Bye,
+    /// Le presse-papiers texte du contrôleur a changé (synchronisation façon
+    /// RDP). Variant ajouté **en fin d'enum** (postcard, ordre = discriminant).
+    Clipboard(String),
 }
 
 /// Messages hôte → contrôleur durant une session chiffrée.
@@ -110,4 +113,7 @@ pub enum HostMessage {
     /// Mise à jour d'image.
     Frame(FrameUpdate),
     Bye,
+    /// Le presse-papiers texte de l'hôte a changé (synchronisation façon RDP).
+    /// Variant ajouté **en fin d'enum** (postcard, ordre = discriminant).
+    Clipboard(String),
 }

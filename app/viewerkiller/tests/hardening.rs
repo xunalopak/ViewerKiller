@@ -23,6 +23,7 @@ fn host_config(addr: std::net::SocketAddr, require_consent: bool) -> HostConfig 
         quality: 75,
         fps: 60,
         require_consent,
+        share_clipboard: false,
     }
 }
 

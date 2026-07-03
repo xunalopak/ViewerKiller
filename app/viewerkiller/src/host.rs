@@ -21,7 +21,11 @@ use vk_net::transport::EncryptedStream;
 use vk_net::NetError;
 use vk_platform::{InputInjector, ScreenCapturer};
 
+use crate::clipboard::ClipboardSync;
 use crate::security::{BruteForceGuard, Consent};
+
+/// Période de sondage du presse-papiers local (synchronisation façon RDP).
+const CLIPBOARD_POLL: Duration = Duration::from_millis(500);
 
 /// Configuration d'un hôte.
 #[derive(Debug, Clone)]
@@ -36,6 +40,8 @@ pub struct HostConfig {
     pub fps: u32,
     /// Si vrai, demande un consentement explicite avant chaque session.
     pub require_consent: bool,
+    /// Si vrai, synchronise le presse-papiers texte avec le contrôleur.
+    pub share_clipboard: bool,
 }
 
 /// Issue du traitement d'une connexion entrante.
@@ -177,6 +183,12 @@ async fn host_session(
     let period = Duration::from_secs_f64(1.0 / config.fps.max(1) as f64);
     let mut ticker = tokio::time::interval(period);
 
+    // Presse-papiers partagé (façon RDP), seulement si activé.
+    let mut clipboard = config
+        .share_clipboard
+        .then(|| ClipboardSync::new(vk_platform::default_clipboard()));
+    let mut clip_ticker = tokio::time::interval(CLIPBOARD_POLL);
+
     loop {
         tokio::select! {
             _ = ticker.tick() => {
@@ -187,10 +199,20 @@ async fn host_session(
                     }
                 }
             }
+            _ = clip_ticker.tick(), if clipboard.is_some() => {
+                if let Some(text) = clipboard.as_mut().and_then(ClipboardSync::poll_local) {
+                    enc.send(&HostMessage::Clipboard(text)).await?;
+                }
+            }
             msg = enc.recv::<ControllerMessage>() => {
                 match msg? {
                     ControllerMessage::Input(ev) => apply_input(injector.as_mut(), ev)?,
                     ControllerMessage::RequestFullFrame => encoder.force_full_frame(),
+                    ControllerMessage::Clipboard(text) => {
+                        if let Some(c) = clipboard.as_mut() {
+                            c.apply_remote(text);
+                        }
+                    }
                     ControllerMessage::Bye => {
                         tracing::info!("contrôleur déconnecté");
                         break;

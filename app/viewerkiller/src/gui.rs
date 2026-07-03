@@ -634,6 +634,7 @@ fn start_host(rt: &tokio::runtime::Runtime) -> (Screen, tokio::task::JoinHandle<
         quality: vk_media::DEFAULT_QUALITY,
         fps: 15,
         require_consent: true,
+        share_clipboard: true,
     };
 
     let (consent_tx, consent_rx) = mpsc::unbounded_channel();
@@ -703,7 +704,7 @@ fn start_connect(rt: &tokio::runtime::Runtime, form: &ConnectForm) -> Result<Scr
             Ok(enc) => {
                 let (events_tx, events_rx) = mpsc::unbounded_channel();
                 let (input_tx, input_rx) = mpsc::unbounded_channel();
-                tokio::spawn(controller_session(enc, events_tx, input_rx));
+                tokio::spawn(controller_session(enc, events_tx, input_rx, true));
                 let _ = tx.send(ConnectResult::Ready {
                     events_rx,
                     input_tx,

@@ -76,6 +76,7 @@ impl FrameReader {
 mod tests {
     use super::*;
     use crate::protocol::*;
+    use serde::{de::DeserializeOwned, Serialize};
 
     #[test]
     fn round_trip_discovery() {
@@ -130,6 +131,25 @@ mod tests {
         reader.feed(&bytes);
         let payload = reader.next_frame().unwrap().unwrap();
         assert_eq!(decode_message::<ControllerMessage>(&payload).unwrap(), msg);
+    }
+
+    fn round_trip<T>(msg: &T) -> T
+    where
+        T: Serialize + DeserializeOwned,
+    {
+        let bytes = encode_message(msg).unwrap();
+        let mut reader = FrameReader::new();
+        reader.feed(&bytes);
+        let payload = reader.next_frame().unwrap().unwrap();
+        decode_message::<T>(&payload).unwrap()
+    }
+
+    #[test]
+    fn clipboard_messages_round_trip() {
+        let ctrl = ControllerMessage::Clipboard("collé é€".into());
+        assert_eq!(round_trip(&ctrl), ctrl);
+        let host = HostMessage::Clipboard("copié 🚀".into());
+        assert_eq!(round_trip(&host), host);
     }
 
     #[test]

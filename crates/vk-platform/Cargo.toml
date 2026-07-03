@@ -19,3 +19,9 @@ features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Input_KeyboardAndMouse",
 ]
+
+# Presse-papiers (synchronisation façon RDP), Windows uniquement : évite de
+# tirer les backends X11/Wayland d'arboard sur la CI Linux.
+[target.'cfg(windows)'.dependencies.arboard]
+version = "3"
+default-features = false

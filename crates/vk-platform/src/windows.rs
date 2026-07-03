@@ -24,7 +24,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
 
-use crate::{Frame, InputInjector, ScreenCapturer};
+use crate::{Clipboard, Frame, InputInjector, ScreenCapturer};
 use vk_core::protocol::MouseButton;
 
 /// Capture de l'écran principal par copie GDI (BGRA).
@@ -250,5 +250,37 @@ impl InputInjector for WindowsInjector {
             }
         }
         Ok(())
+    }
+}
+
+/// Presse-papiers système via `arboard`. Si l'initialisation échoue (rare sous
+/// Windows), la synchronisation est simplement inactive.
+pub struct WindowsClipboard {
+    inner: Option<arboard::Clipboard>,
+}
+
+impl WindowsClipboard {
+    pub fn new() -> Self {
+        Self {
+            inner: arboard::Clipboard::new().ok(),
+        }
+    }
+}
+
+impl Default for WindowsClipboard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Clipboard for WindowsClipboard {
+    fn get_text(&mut self) -> Option<String> {
+        let text = self.inner.as_mut()?.get_text().ok()?;
+        (!text.is_empty()).then_some(text)
+    }
+    fn set_text(&mut self, text: &str) {
+        if let Some(c) = self.inner.as_mut() {
+            let _ = c.set_text(text.to_owned());
+        }
     }
 }
