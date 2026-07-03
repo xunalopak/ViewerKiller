@@ -12,8 +12,8 @@ use std::time::Duration;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 use viewerkiller::{
-    controller::connect_to, controller_session, generate_credentials, serve, AutoAccept,
-    BruteForceGuard, ControllerConfig, HostConfig, SessionEvent,
+    controller::connect_to, controller_session, generate_credentials, local_ipv4_addresses, serve,
+    AutoAccept, BruteForceGuard, ControllerConfig, HostConfig, SessionEvent,
 };
 use vk_core::protocol::{InputEvent, MouseButton, DEFAULT_PORT};
 use vk_media::FrameBuffer;
@@ -48,6 +48,9 @@ enum Screen {
 struct App {
     rt: tokio::runtime::Runtime,
     screen: Screen,
+    /// Tâche `serve` de l'hôte en cours, pour pouvoir l'arrêter au retour à
+    /// l'accueil (sinon l'ancien listener — et son ancien code — survivrait).
+    host_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl App {
@@ -55,6 +58,7 @@ impl App {
         Self {
             rt: tokio::runtime::Runtime::new().expect("runtime tokio"),
             screen: Screen::Home,
+            host_task: None,
         }
     }
 }
@@ -65,6 +69,8 @@ struct HostScreen {
     code: String,
     password: String,
     bind_addr: SocketAddr,
+    /// Adresses IPv4 locales (Wi-Fi, Ethernet…) à communiquer au contrôleur.
+    addresses: Vec<(String, Ipv4Addr)>,
 }
 
 // --- Formulaire de connexion ----------------------------------------------
@@ -151,6 +157,7 @@ impl SessionScreen {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut next: Option<Screen> = None;
+        let mut new_host_task: Option<tokio::task::JoinHandle<()>> = None;
 
         match &mut self.screen {
             Screen::Home => {
@@ -161,7 +168,9 @@ impl eframe::App for App {
                         ui.label("Contrôle à distance sécurisé, chiffré de bout en bout");
                         ui.add_space(40.0);
                         if ui.button("🖥  Héberger (être contrôlé)").clicked() {
-                            next = Some(start_host(&self.rt));
+                            let (screen, task) = start_host(&self.rt);
+                            next = Some(screen);
+                            new_host_task = Some(task);
                         }
                         ui.add_space(10.0);
                         if ui.button("🔗  Se connecter (contrôler)").clicked() {
@@ -178,6 +187,17 @@ impl eframe::App for App {
                         ui.heading("Hôte en écoute");
                         ui.add_space(20.0);
                         ui.label(format!("Écoute sur : {}", host.bind_addr));
+                        if !host.addresses.is_empty() {
+                            ui.add_space(10.0);
+                            ui.label(
+                                egui::RichText::new("Adresses IP (pour le contrôleur)").strong(),
+                            );
+                            for (name, ip) in &host.addresses {
+                                ui.label(
+                                    egui::RichText::new(format!("{name} : {ip}")).monospace(),
+                                );
+                            }
+                        }
                         ui.add_space(20.0);
                         ui.label(egui::RichText::new("Code").strong());
                         ui.label(egui::RichText::new(&host.code).size(36.0).monospace());
@@ -301,6 +321,19 @@ impl eframe::App for App {
             }
         }
 
+        // Cycle de vie de la tâche hôte : on retient la nouvelle, et tout
+        // retour à l'accueil arrête celle en cours (libère le port d'écoute).
+        if let Some(task) = new_host_task {
+            if let Some(old) = self.host_task.replace(task) {
+                old.abort();
+            }
+        }
+        if matches!(next, Some(Screen::Home)) {
+            if let Some(task) = self.host_task.take() {
+                task.abort();
+            }
+        }
+
         if let Some(screen) = next {
             self.screen = screen;
         }
@@ -381,7 +414,7 @@ fn draw_session(ui: &mut egui::Ui, session: &mut SessionScreen) {
 
 // --- Démarrage hôte / connexion -------------------------------------------
 
-fn start_host(rt: &tokio::runtime::Runtime) -> Screen {
+fn start_host(rt: &tokio::runtime::Runtime) -> (Screen, tokio::task::JoinHandle<()>) {
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), DEFAULT_PORT);
     let (code, password) = generate_credentials();
     let config = HostConfig {
@@ -395,7 +428,7 @@ fn start_host(rt: &tokio::runtime::Runtime) -> Screen {
         require_consent: false,
     };
 
-    rt.spawn(async move {
+    let task = rt.spawn(async move {
         let mut guard = BruteForceGuard::new(5, Duration::from_secs(60));
         let mut consent = AutoAccept;
         let mut make_capturer = || vk_platform::default_capturer();
@@ -413,11 +446,13 @@ fn start_host(rt: &tokio::runtime::Runtime) -> Screen {
         }
     });
 
-    Screen::Host(HostScreen {
+    let screen = Screen::Host(HostScreen {
         code,
         password,
         bind_addr,
-    })
+        addresses: local_ipv4_addresses(),
+    });
+    (screen, task)
 }
 
 enum ConnectResult {

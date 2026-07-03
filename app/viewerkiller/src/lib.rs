@@ -21,3 +21,21 @@ pub fn generate_credentials() -> (String, String) {
     let password: String = (0..12).map(|_| rng.sample(Alphanumeric) as char).collect();
     (code, password)
 }
+
+/// Adresses IPv4 locales (nom d'interface, adresse) à communiquer au
+/// contrôleur : Wi-Fi, Ethernet, VPN… Exclut le loopback et
+/// l'auto-configuration (169.254/16). Affichage uniquement — aucun balayage.
+pub fn local_ipv4_addresses() -> Vec<(String, std::net::Ipv4Addr)> {
+    let mut out = Vec::new();
+    if let Ok(ifaces) = if_addrs::get_if_addrs() {
+        for ifa in ifaces {
+            if let if_addrs::IfAddr::V4(v4) = ifa.addr {
+                if v4.ip.is_loopback() || v4.ip.is_link_local() {
+                    continue;
+                }
+                out.push((ifa.name, v4.ip));
+            }
+        }
+    }
+    out
+}

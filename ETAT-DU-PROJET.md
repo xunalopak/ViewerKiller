@@ -4,7 +4,7 @@
 > connectent **directement** par IP + port, sans serveur de rendez-vous.
 > Chiffrement bout-en-bout (Noise), code de connexion + mot de passe.
 
-Dernière mise à jour : **2026-07-01**. Plan détaillé :
+Dernière mise à jour : **2026-07-03**. Plan détaillé :
 `~/.claude/plans/j-aimerai-construire-une-alternative-peaceful-castle.md`.
 
 ## Décisions verrouillées
@@ -69,7 +69,7 @@ app/viewerkiller/    lib : host.rs, controller.rs, security.rs
 
 ## Build & test
 ```bash
-cargo test --workspace      # 21 tests, tous verts sur Linux
+cargo test --workspace      # 22 tests, tous verts sur Linux
 cargo build --workspace
 # Vérif du code Windows (#[cfg(windows)]) sans machine Windows, type-check seul :
 rustup target add x86_64-pc-windows-gnu
@@ -101,6 +101,13 @@ la **validation runtime** et la perf :
 - `EncryptedStream` utilise un seul `Transport` Noise (nonces séparés par sens) ;
   ne pas tenter de splitter lecture/écriture sur deux tâches sans mutex — la
   boucle de session utilise `tokio::select!`.
+- **`recv` doit rester sûr vis-à-vis de l'annulation** : l'état de lecture
+  (tampon `rx`) vit dans `EncryptedStream`, pas dans le futur. Ne jamais
+  revenir à un `read_exact` sur tampons locaux : un `recv` annulé par
+  `select!` (ticker hôte, entrées contrôleur) perdrait les octets déjà lus et
+  produirait des « decrypt error » aléatoires — uniquement sur réseau réel,
+  jamais en loopback (enregistrements livrés entiers). Bug v0.1.3, régression
+  couverte par `recv_survives_select_cancellation_mid_record`.
 - Capture Windows = **GDI BitBlt** (pas DXGI) : `scrap` ne cross-compile pas
   (backend X11 mal gardé). `WindowsCapturer` est marqué `unsafe impl Send`
   (handles GDI mono-thread).

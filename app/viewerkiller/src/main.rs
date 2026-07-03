@@ -73,6 +73,13 @@ async fn run_host(bind_addr: SocketAddr) -> Result<()> {
     println!("======================================");
     println!("  ViewerKiller — hôte prêt");
     println!("  Écoute        : {bind_addr}");
+    let addresses = viewerkiller::local_ipv4_addresses();
+    if !addresses.is_empty() {
+        println!("  Adresses IP (pour le contrôleur) :");
+        for (name, ip) in &addresses {
+            println!("    - {name} : {ip}");
+        }
+    }
     println!("  Code          : {code}");
     println!("  Mot de passe  : {password}");
     println!("======================================");

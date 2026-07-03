@@ -1805,6 +1805,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "if-addrs"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69b2eeee38fef3aa9b4cc5f1beea8a2444fc00e7377cafae396de3f5c2065e24"
+dependencies = [
+ "libc",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "image"
 version = "0.25.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3629,11 +3639,12 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "viewerkiller"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "eframe",
  "egui",
+ "if-addrs",
  "rand",
  "tokio",
  "tracing",
@@ -3646,7 +3657,7 @@ dependencies = [
 
 [[package]]
 name = "vk-core"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "blake3",
  "postcard",
@@ -3657,7 +3668,7 @@ dependencies = [
 
 [[package]]
 name = "vk-media"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "jpeg-decoder",
  "jpeg-encoder",
@@ -3669,7 +3680,7 @@ dependencies = [
 
 [[package]]
 name = "vk-net"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "serde",
  "thiserror 2.0.18",
@@ -3680,7 +3691,7 @@ dependencies = [
 
 [[package]]
 name = "vk-platform"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "vk-core",

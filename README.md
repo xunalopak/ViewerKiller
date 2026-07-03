@@ -35,7 +35,7 @@ app/viewerkiller/    orchestration hôte/contrôleur, durcissement, CLI + GUI eg
 
 ```bash
 cargo build --release --workspace
-cargo test --workspace            # 21 tests
+cargo test --workspace            # 22 tests
 ```
 
 Sur Linux, le code spécifique Windows se vérifie en cross-compilation :
@@ -56,6 +56,9 @@ redirigé…) :
 viewerkiller-gui      # côté hôte : « Héberger » → affiche un code + un mot de passe
 viewerkiller-gui      # côté contrôleur : « Se connecter » → saisir code + mot de passe + IP de l'hôte
 ```
+
+L'écran « Héberger » liste les adresses IP locales (Wi-Fi, Ethernet, VPN…) à
+communiquer au contrôleur.
 
 **CLI** :
 
