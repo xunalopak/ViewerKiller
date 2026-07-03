@@ -253,33 +253,29 @@ impl InputInjector for WindowsInjector {
     }
 }
 
-/// Presse-papiers système via `arboard`. Si l'initialisation échoue (rare sous
-/// Windows), la synchronisation est simplement inactive.
-pub struct WindowsClipboard {
-    inner: Option<arboard::Clipboard>,
-}
+/// Presse-papiers système via `arboard`.
+///
+/// Sans état : un handle `arboard` est créé à la volée à chaque accès (léger
+/// sous Windows, la synchro ne sonde que toutes les 500 ms). Cela garantit que
+/// le type reste `Send` — il traverse les `await` d'une tâche tokio — sans
+/// dépendre de la « sendabilité » du handle `arboard`. Si l'accès échoue, la
+/// synchronisation est simplement sans effet.
+#[derive(Default)]
+pub struct WindowsClipboard;
 
 impl WindowsClipboard {
     pub fn new() -> Self {
-        Self {
-            inner: arboard::Clipboard::new().ok(),
-        }
-    }
-}
-
-impl Default for WindowsClipboard {
-    fn default() -> Self {
-        Self::new()
+        Self
     }
 }
 
 impl Clipboard for WindowsClipboard {
     fn get_text(&mut self) -> Option<String> {
-        let text = self.inner.as_mut()?.get_text().ok()?;
+        let text = arboard::Clipboard::new().ok()?.get_text().ok()?;
         (!text.is_empty()).then_some(text)
     }
     fn set_text(&mut self, text: &str) {
-        if let Some(c) = self.inner.as_mut() {
+        if let Ok(mut c) = arboard::Clipboard::new() {
             let _ = c.set_text(text.to_owned());
         }
     }
