@@ -53,6 +53,9 @@ impl InputInjector for NullInjector {
     fn key(&mut self, _key: u32, _pressed: bool) -> anyhow::Result<()> {
         Ok(())
     }
+    fn char_input(&mut self, _c: char) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 fn capturer() -> Box<dyn ScreenCapturer> {
