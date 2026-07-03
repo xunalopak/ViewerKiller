@@ -80,8 +80,10 @@ cargo run -p viewerkiller -- connect <code> <mot_de_passe> <ip[:port]>
 ```
 
 ## Reprise — prochaines étapes concrètes
-Tous les jalons sont codés et vérifiés (tests Linux + cross-check Windows). Reste
-la **validation runtime** et la perf :
+Les évolutions (J8 et suivants) sont planifiées dans
+[`FEUILLE-DE-ROUTE.md`](FEUILLE-DE-ROUTE.md). Tous les jalons MVP sont codés et
+vérifiés (tests Linux + cross-check Windows). Reste la **validation runtime**
+et la perf :
 1. **Test runtime sur Windows** — `cargo run --bin viewerkiller-gui` (ou la CLI)
    sur deux machines qui peuvent se joindre en TCP (LAN, VPN, port forwardé…).
    L'hôte affiche le code+mdp et écoute ; le contrôleur saisit code+mdp+IP →

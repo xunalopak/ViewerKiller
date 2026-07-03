@@ -74,8 +74,9 @@ contrôleur se connecte directement à l'adresse indiquée.
 
 Tous les composants sont implémentés. La chaîne complète est testée sous Linux
 (stubs) et le code natif Windows est vérifié à la compilation ; la **validation au
-runtime se fait sur Windows**. Détails et feuille de route : voir
-[`ETAT-DU-PROJET.md`](ETAT-DU-PROJET.md).
+runtime se fait sur Windows**. Détails : voir
+[`ETAT-DU-PROJET.md`](ETAT-DU-PROJET.md). Évolutions prévues :
+[`FEUILLE-DE-ROUTE.md`](FEUILLE-DE-ROUTE.md).
 
 ## Licence
 
