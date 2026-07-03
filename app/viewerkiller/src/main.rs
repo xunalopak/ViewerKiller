@@ -42,7 +42,9 @@ async fn main() -> Result<()> {
                 .get(2)
                 .map(|s| parse_addr(s, DEFAULT_PORT))
                 .transpose()?
-                .unwrap_or_else(|| SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), DEFAULT_PORT));
+                .unwrap_or_else(|| {
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), DEFAULT_PORT)
+                });
             run_host(bind_addr).await
         }
         Some("connect") => {
