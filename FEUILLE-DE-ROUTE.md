@@ -23,14 +23,17 @@ d'accents.
       sauf AltGr (= Ctrl+Alt) qui passe par `Text`. (Pas de touche Win : egui
       ne l'expose pas comme modificateur sous Windows.)
 
-## J9 — Consentement + indicateur en GUI
+## J9 — Consentement + indicateur en GUI — **fait (v0.1.6)**
 
-L'écran « Héberger » utilise `AutoAccept` : quiconque a code + mot de passe
-prend la main sans que l'hôte ne voie rien.
+Avant : l'écran « Héberger » utilisait `AutoAccept` — quiconque avait code +
+mot de passe prenait la main sans que l'hôte ne voie rien.
 
-- [ ] Impl `Consent` (security.rs) branchée sur une boîte de dialogue egui
-      (canal GUI↔tokio, timeout ~30 s = refus) ; `require_consent: true`.
-- [ ] Bandeau « session en cours depuis <IP> » + bouton pour couper.
+- [x] Impl `Consent` (`GuiConsent`, gui.rs) branchée sur une boîte de dialogue
+      egui (canal tokio→UI + oneshot retour, timeout 30 s = refus) ;
+      `require_consent: true`. Trait `Consent` doté d'un `session_ended` (défaut
+      no-op) pour retirer l'indicateur.
+- [x] Bannière « 🔴 Session en cours depuis <IP> » sur l'écran hôte ; « Retour »
+      arrête l'hébergement (et coupe la session en cours).
 
 ## J10 — Fluidité
 
@@ -85,8 +88,10 @@ Gros chantier, à faire après J10.
 
 ## Petits correctifs au fil de l'eau (repérés en revue)
 
-- [ ] `Probe.proto_version` ignoré par l'hôte (`handle_connection`, host.rs) →
-      répondre « version incompatible » proprement.
+- [x] `Probe.proto_version` : l'hôte refuse désormais une version incompatible
+      et la journalise (`handle_connection`, host.rs) — fait en v0.1.6. (Le
+      contrôleur reçoit encore un « code non reconnu » générique : un message
+      dédié demanderait un champ de plus dans `ProbeResult`.)
 - [ ] Molette horizontale ignorée (`mouse_scroll` jette `dx`,
       vk-platform/windows.rs → `MOUSEEVENTF_HWHEEL`).
 - [ ] Le contrôleur n'envoie pas `Bye` quand l'UI ferme `events_rx`

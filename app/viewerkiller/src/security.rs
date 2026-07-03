@@ -66,6 +66,11 @@ pub type ConsentFuture = Pin<Box<dyn Future<Output = bool> + Send>>;
 /// surveillance on utilise [`AutoAccept`].
 pub trait Consent: Send {
     fn request(&mut self, peer: SocketAddr) -> ConsentFuture;
+
+    /// Notifie la fin d'une session **acceptée** (déconnexion du contrôleur ou
+    /// erreur). Permet à l'UI de retirer l'indicateur « session en cours ».
+    /// Par défaut : ne fait rien.
+    fn session_ended(&mut self, _peer: SocketAddr) {}
 }
 
 /// Accepte toute connexion (mode non surveillé).

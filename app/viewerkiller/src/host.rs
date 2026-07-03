@@ -12,7 +12,9 @@ use anyhow::{Context, Result};
 use tokio::net::{TcpListener, TcpStream};
 
 use vk_core::crypto::derive_psk;
-use vk_core::protocol::{ControllerMessage, DiscoveryMessage, HostMessage, InputEvent};
+use vk_core::protocol::{
+    ControllerMessage, DiscoveryMessage, HostMessage, InputEvent, PROTO_VERSION,
+};
 use vk_media::TileEncoder;
 use vk_net::frame::{read_framed, write_framed};
 use vk_net::transport::EncryptedStream;
@@ -99,9 +101,25 @@ pub async fn handle_connection(
         return Ok(ConnectionOutcome::Locked);
     }
 
-    // 1. Découverte.
+    // 1. Découverte : le code doit correspondre ET la version de protocole être
+    //    identique (sinon la session échouerait plus loin par un message
+    //    cryptique ; on refuse tôt en le journalisant).
     let probe: DiscoveryMessage = read_framed(&mut stream).await?;
-    let matches = matches!(&probe, DiscoveryMessage::Probe { code, .. } if *code == config.code);
+    let matches = match &probe {
+        DiscoveryMessage::Probe {
+            code,
+            proto_version,
+        } => {
+            if *proto_version != PROTO_VERSION {
+                tracing::warn!(
+                    target: "audit", %peer, theirs = proto_version, ours = PROTO_VERSION,
+                    "version de protocole incompatible"
+                );
+            }
+            *code == config.code && *proto_version == PROTO_VERSION
+        }
+        _ => false,
+    };
     write_framed(
         &mut stream,
         &DiscoveryMessage::ProbeResult {
@@ -138,7 +156,10 @@ pub async fn handle_connection(
     }
 
     tracing::info!(target: "audit", %peer, host = %config.host_name, "session établie");
-    host_session(enc, capturer, injector, config).await?;
+    let result = host_session(enc, capturer, injector, config).await;
+    // Toujours signaler la fin (même sur erreur) pour retirer l'indicateur UI.
+    consent.session_ended(peer);
+    result?;
     tracing::info!(target: "audit", %peer, "session terminée");
     Ok(ConnectionOutcome::Completed)
 }

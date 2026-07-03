@@ -1,6 +1,8 @@
 //! Tests d'intégration du durcissement : anti-bruteforce sur le mot de passe et
 //! refus par consentement, sur boucle TCP locale.
 
+use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tokio::net::TcpListener;
@@ -8,6 +10,7 @@ use tokio::net::TcpListener;
 use viewerkiller::{
     AutoAccept, BruteForceGuard, ConnectionOutcome, ControllerConfig, HostConfig, RejectAll,
 };
+use vk_core::protocol::{ControllerMessage, HostMessage};
 use vk_platform::{Frame, InputInjector, ScreenCapturer};
 
 fn host_config(addr: std::net::SocketAddr, require_consent: bool) -> HostConfig {
@@ -156,4 +159,63 @@ async fn consent_refusal_blocks_session() {
     .unwrap();
     assert_eq!(outcome, ConnectionOutcome::Refused);
     let _ = ctrl.await;
+}
+
+/// Journal des pairs dont la session s'est terminée.
+#[derive(Clone, Default)]
+struct EndLog(Arc<Mutex<Vec<SocketAddr>>>);
+
+/// Consentement qui accepte et enregistre chaque fin de session.
+struct AcceptAndLog {
+    log: EndLog,
+}
+impl viewerkiller::Consent for AcceptAndLog {
+    fn request(&mut self, _peer: SocketAddr) -> viewerkiller::ConsentFuture {
+        Box::pin(async { true })
+    }
+    fn session_ended(&mut self, peer: SocketAddr) {
+        self.log.0.lock().unwrap().push(peer);
+    }
+}
+
+#[tokio::test]
+async fn accepted_session_reports_end() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let config = host_config(addr, true);
+
+    let mut guard = BruteForceGuard::new(5, Duration::from_secs(60));
+    let log = EndLog::default();
+    let mut consent = AcceptAndLog { log: log.clone() };
+
+    let cfg = ControllerConfig {
+        code: "111222".into(),
+        password: "bon-mot-de-passe".into(),
+        port: addr.port(),
+    };
+    // Le contrôleur s'authentifie, reçoit la géométrie, puis se déconnecte.
+    let ctrl = tokio::spawn(async move {
+        let mut enc = viewerkiller::controller::connect_to(addr, &cfg)
+            .await
+            .unwrap();
+        let _: HostMessage = enc.recv().await.unwrap(); // ScreenInfo
+        enc.send(&ControllerMessage::Bye).await.unwrap();
+    });
+
+    let (stream, _) = listener.accept().await.unwrap();
+    let outcome = viewerkiller::handle_connection(
+        stream,
+        &config,
+        &mut guard,
+        &mut consent,
+        capturer(),
+        injector(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome, ConnectionOutcome::Completed);
+    ctrl.await.unwrap();
+
+    // La fin de session a bien été signalée une fois.
+    assert_eq!(log.0.lock().unwrap().len(), 1);
 }

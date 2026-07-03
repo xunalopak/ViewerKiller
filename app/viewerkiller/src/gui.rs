@@ -14,10 +14,11 @@ use std::sync::mpsc as std_mpsc;
 use std::time::Duration;
 
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::sync::oneshot;
 
 use viewerkiller::{
     controller::connect_to, controller_session, generate_credentials, local_ipv4_addresses, serve,
-    AutoAccept, BruteForceGuard, ControllerConfig, HostConfig, SessionEvent,
+    BruteForceGuard, ControllerConfig, HostConfig, SessionEvent,
 };
 use vk_core::protocol::{InputEvent, MouseButton, DEFAULT_PORT};
 use vk_media::FrameBuffer;
@@ -75,6 +76,62 @@ struct HostScreen {
     bind_addr: SocketAddr,
     /// Adresses IPv4 locales (Wi-Fi, Ethernet…) à communiquer au contrôleur.
     addresses: Vec<(String, Ipv4Addr)>,
+    /// Demandes de consentement et fins de session en provenance du fil réseau.
+    consent_rx: UnboundedReceiver<ConsentMsg>,
+    /// Demande en attente d'une décision de l'utilisateur.
+    pending: Option<PendingConsent>,
+    /// Pair actuellement connecté (bannière « session en cours »).
+    active: Option<SocketAddr>,
+}
+
+/// Une demande de connexion en attente de la décision de l'utilisateur.
+struct PendingConsent {
+    peer: SocketAddr,
+    reply: oneshot::Sender<bool>,
+}
+
+/// Message du fil réseau (hôte) vers l'écran hôte.
+enum ConsentMsg {
+    /// Un contrôleur authentifié demande la main ; répondre via `reply`.
+    Request {
+        peer: SocketAddr,
+        reply: oneshot::Sender<bool>,
+    },
+    /// La session avec `peer` s'est terminée.
+    Ended { peer: SocketAddr },
+}
+
+/// Impl [`viewerkiller::Consent`] branchée sur l'UI egui : chaque demande est
+/// transmise à l'écran hôte, qui répond via un canal oneshot. Sans réponse sous
+/// 30 s (ou si l'UI a disparu), la connexion est refusée.
+struct GuiConsent {
+    tx: UnboundedSender<ConsentMsg>,
+}
+
+impl viewerkiller::Consent for GuiConsent {
+    fn request(&mut self, peer: SocketAddr) -> viewerkiller::ConsentFuture {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        let queued = self
+            .tx
+            .send(ConsentMsg::Request {
+                peer,
+                reply: reply_tx,
+            })
+            .is_ok();
+        Box::pin(async move {
+            if !queued {
+                return false;
+            }
+            matches!(
+                tokio::time::timeout(Duration::from_secs(30), reply_rx).await,
+                Ok(Ok(true))
+            )
+        })
+    }
+
+    fn session_ended(&mut self, peer: SocketAddr) {
+        let _ = self.tx.send(ConsentMsg::Ended { peer });
+    }
 }
 
 // --- Formulaire de connexion ----------------------------------------------
@@ -188,6 +245,25 @@ impl eframe::App for App {
             }
 
             Screen::Host(host) => {
+                // Draine les messages du fil réseau (demandes / fins de session).
+                while let Ok(msg) = host.consent_rx.try_recv() {
+                    match msg {
+                        ConsentMsg::Request { peer, reply } => {
+                            // L'hôte ne sert qu'une session à la fois ; une
+                            // nouvelle demande remplace (et refuse) l'ancienne.
+                            if let Some(prev) = host.pending.replace(PendingConsent { peer, reply })
+                            {
+                                let _ = prev.reply.send(false);
+                            }
+                        }
+                        ConsentMsg::Ended { peer } => {
+                            if host.active == Some(peer) {
+                                host.active = None;
+                            }
+                        }
+                    }
+                }
+
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.vertical_centered(|ui| {
                         ui.add_space(80.0);
@@ -209,14 +285,54 @@ impl eframe::App for App {
                         ui.add_space(10.0);
                         ui.label(egui::RichText::new("Mot de passe").strong());
                         ui.label(egui::RichText::new(&host.password).size(24.0).monospace());
-                        ui.add_space(30.0);
-                        ui.label("Transmettez ces identifiants au contrôleur.");
                         ui.add_space(20.0);
-                        if ui.button("Retour").clicked() {
+                        if let Some(peer) = host.active {
+                            ui.colored_label(
+                                egui::Color32::from_rgb(0xE0, 0x50, 0x50),
+                                format!("🔴 Session en cours depuis {peer}"),
+                            );
+                        } else {
+                            ui.label(
+                                egui::RichText::new("Transmettez ces identifiants au contrôleur.")
+                                    .weak(),
+                            );
+                        }
+                        ui.add_space(20.0);
+                        if ui.button("Retour (arrêter l'hébergement)").clicked() {
                             next = Some(Screen::Home);
                         }
                     });
                 });
+
+                // Boîte de dialogue de consentement, au-dessus de l'écran hôte.
+                if let Some(peer) = host.pending.as_ref().map(|p| p.peer) {
+                    egui::Window::new("Demande de connexion")
+                        .collapsible(false)
+                        .resizable(false)
+                        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                        .show(ctx, |ui| {
+                            ui.label(format!(
+                                "{peer} souhaite prendre le contrôle de cet ordinateur."
+                            ));
+                            ui.add_space(12.0);
+                            ui.horizontal(|ui| {
+                                if ui.button("Accepter").clicked() {
+                                    if let Some(p) = host.pending.take() {
+                                        let _ = p.reply.send(true);
+                                        host.active = Some(p.peer);
+                                    }
+                                }
+                                if ui.button("Refuser").clicked() {
+                                    if let Some(p) = host.pending.take() {
+                                        let _ = p.reply.send(false);
+                                    }
+                                }
+                            });
+                        });
+                }
+
+                // Rafraîchir pour traiter les demandes même sans interaction.
+                ctx.request_repaint_after(Duration::from_millis(200));
             }
 
             Screen::Connect(form) => {
@@ -517,12 +633,13 @@ fn start_host(rt: &tokio::runtime::Runtime) -> (Screen, tokio::task::JoinHandle<
         tile_size: vk_media::DEFAULT_TILE_SIZE,
         quality: vk_media::DEFAULT_QUALITY,
         fps: 15,
-        require_consent: false,
+        require_consent: true,
     };
 
+    let (consent_tx, consent_rx) = mpsc::unbounded_channel();
     let task = rt.spawn(async move {
         let mut guard = BruteForceGuard::new(5, Duration::from_secs(60));
-        let mut consent = AutoAccept;
+        let mut consent = GuiConsent { tx: consent_tx };
         let mut make_capturer = || vk_platform::default_capturer();
         let mut make_injector = || vk_platform::default_injector();
         if let Err(e) = serve(
@@ -543,6 +660,9 @@ fn start_host(rt: &tokio::runtime::Runtime) -> (Screen, tokio::task::JoinHandle<
         password,
         bind_addr,
         addresses: local_ipv4_addresses(),
+        consent_rx,
+        pending: None,
+        active: None,
     });
     (screen, task)
 }
