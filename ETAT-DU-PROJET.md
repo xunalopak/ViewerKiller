@@ -52,10 +52,10 @@ app/viewerkiller/    lib : host.rs, controller.rs, security.rs
                      tests : e2e.rs, hardening.rs
 ```
 
-> Note perf : l'encodage JPEG dans `host_session` est **synchrone** sur le
-> runtime ; les binaires utilisent un runtime multi-thread donc OK, mais une
-> optimisation future = `spawn_blocking` pour l'encode. Le test e2e force
-> `multi_thread` pour éviter la starvation.
+> Note perf (v0.1.8, J10) : l'encodage JPEG de `host_session` tourne désormais
+> dans `spawn_blocking` (ne monopolise plus un thread ouvrier) et le ticker de
+> trames est en `MissedTickBehavior::Skip` (cadence adaptative, pas
+> d'accumulation sous charge). Optimisation restante = capture DXGI (J10b).
 
 ## Format réseau (rappel)
 1. Connexion TCP directe du contrôleur vers `ip:port` de l'hôte, puis

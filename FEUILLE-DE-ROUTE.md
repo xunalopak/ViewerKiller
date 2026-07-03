@@ -35,15 +35,26 @@ mot de passe prenait la main sans que l'hôte ne voie rien.
 - [x] Bannière « 🔴 Session en cours depuis <IP> » sur l'écran hôte ; « Retour »
       arrête l'hébergement (et coupe la session en cours).
 
-## J10 — Fluidité
+## J10 — Fluidité — **partiel (v0.1.8)**
 
-- [ ] `spawn_blocking` autour de `encoder.encode(...)` dans `host_session`
-      (host.rs) — l'encodage JPEG est synchrone sur le runtime.
-- [ ] Capture **DXGI Desktop Duplication** (crate `windows`,
-      `IDXGIOutputDuplication`) avec *dirty rects* natifs ; repli GDI
-      (`WindowsCapturer` actuel) si indisponible.
-- [ ] fps/qualité adaptatifs simples (baisser la cadence quand l'envoi
-      précédent n'est pas terminé).
+- [x] `spawn_blocking` autour de `encoder.encode(...)` dans `host_session`
+      (host.rs) — l'encodage JPEG synchrone ne monopolise plus un thread
+      ouvrier du runtime ; l'encodeur (état inter-trames) est déplacé dans la
+      tâche puis récupéré.
+- [x] Cadence adaptative : `MissedTickBehavior::Skip` sur le ticker de trames
+      (et le ticker presse-papiers) — sous charge, on saute les ticks manqués
+      au lieu de les rattraper en rafale, donc pas d'accumulation de retard.
+- [ ] (**J10b**) fps/qualité *dynamiques* (mesure de latence) — au-delà du
+      simple Skip.
+
+## J10b — Capture DXGI Desktop Duplication
+
+Reporté : ~300 lignes de COM `unsafe` (crate `windows`,
+`IDXGIOutputDuplication`) non compilables/testables sans machine Windows. À
+faire quand un build/test Windows local sera disponible.
+
+- [ ] Capture DXGI avec *dirty rects* natifs ; repli sur `WindowsCapturer`
+      (GDI) actuel si indisponible ou sur `DXGI_ERROR_ACCESS_LOST`.
 
 ## J11 — Presse-papiers partagé — **fait (v0.1.7)**
 

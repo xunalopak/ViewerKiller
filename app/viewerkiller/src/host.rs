@@ -182,18 +182,34 @@ async fn host_session(
     let mut encoder = TileEncoder::new(config.tile_size, config.quality);
     let period = Duration::from_secs_f64(1.0 / config.fps.max(1) as f64);
     let mut ticker = tokio::time::interval(period);
+    // Cadence adaptative : si une trame (capture + encode + envoi) déborde la
+    // période, on saute les ticks manqués au lieu de les rattraper en rafale —
+    // le débit baisse tout seul sous charge, sans accumuler de retard.
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     // Presse-papiers partagé (façon RDP), seulement si activé.
     let mut clipboard = config
         .share_clipboard
         .then(|| ClipboardSync::new(vk_platform::default_clipboard()));
     let mut clip_ticker = tokio::time::interval(CLIPBOARD_POLL);
+    clip_ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     loop {
         tokio::select! {
             _ = ticker.tick() => {
                 if let Some(frame) = capturer.capture()? {
-                    let update = encoder.encode(&frame)?;
+                    // L'encodage JPEG est synchrone et coûteux : on le sort du
+                    // runtime async (spawn_blocking) pour ne pas monopoliser un
+                    // thread ouvrier. L'encodeur (état inter-trames) est déplacé
+                    // dans la tâche puis récupéré. L'erreur est convertie en
+                    // texte pour rester `Send` à travers la frontière de tâche.
+                    let (returned, update) = tokio::task::spawn_blocking(move || {
+                        let update = encoder.encode(&frame).map_err(|e| e.to_string());
+                        (encoder, update)
+                    })
+                    .await?;
+                    encoder = returned;
+                    let update = update.map_err(anyhow::Error::msg)?;
                     if !update.tiles.is_empty() {
                         enc.send(&HostMessage::Frame(update)).await?;
                     }
