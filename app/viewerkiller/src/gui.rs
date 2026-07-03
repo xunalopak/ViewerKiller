@@ -426,7 +426,12 @@ fn draw_session(ui: &mut egui::Ui, session: &mut SessionScreen) {
                     let _ = session.input_tx.send(InputEvent::Char { c });
                 }
             }
-            egui::Event::Key { key, pressed, modifiers, .. } => {
+            egui::Event::Key {
+                key,
+                pressed,
+                modifiers,
+                ..
+            } => {
                 // AltGr = Ctrl+Alt : le caractère composé arrive via `Text`.
                 let altgr = modifiers.ctrl && modifiers.alt;
                 let shortcut = (modifiers.ctrl || modifiers.alt) && !altgr;
@@ -455,7 +460,10 @@ fn send_modifier_transitions(session: &mut SessionScreen, mods: egui::Modifiers)
         (prev.alt, mods.alt, VK_MENU),
     ] {
         if was != is {
-            let _ = session.input_tx.send(InputEvent::Key { key: vk, pressed: is });
+            let _ = session.input_tx.send(InputEvent::Key {
+                key: vk,
+                pressed: is,
+            });
         }
     }
     session.mods = mods;
