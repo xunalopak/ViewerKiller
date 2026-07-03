@@ -96,6 +96,43 @@ Gros chantier, à faire après J10.
 - [ ] Logs fichier + panneau de diagnostic GUI (la console GUI a été retirée
       en v0.1.4).
 
+## J16 — Auto-update depuis les releases GitHub
+
+Résout la corvée récurrente : chaque bump de `PROTO_VERSION` impose aujourd'hui
+de mettre à jour les **deux** machines à la main. Vérification via l'API GitHub
+Releases (repo public, `releases/latest` sans authentification), comparaison au
+`env!("CARGO_PKG_VERSION")` courant.
+
+Approche retenue : **vérification au lancement + application manuelle** (un clic
+« Mettre à jour » en GUI, sous-commande `viewerkiller update` en CLI) plutôt
+qu'un remplacement silencieux — pour un outil de contrôle à distance,
+l'utilisateur garde la main. Mini-updater maison avec `ureq` (HTTP léger)
+plutôt que `self_update` (tire reqwest/tokio/TLS), pour des dépendances
+maîtrisées et un chemin auditable.
+
+### J16a — Notification de version (zéro risque)
+
+- [ ] `release.yml` publie un `SHA256SUMS` des binaires.
+- [ ] Au lancement, requête `releases/latest` → bandeau « v0.x.y disponible »
+      en GUI, ligne en CLI. Purement informatif, aucun téléchargement.
+
+### J16b — Téléchargement + remplacement
+
+- [ ] Télécharger l'asset, **vérifier le SHA256** avant tout (intégrité).
+- [ ] Swap Windows : renommer l'exe courant en `.old` (un exe en cours ne peut
+      être écrasé), écrire le neuf, relancer, purger le `.old` au démarrage
+      suivant. Fonctionne sans UAC tant que la distribution reste un zip
+      portable en dossier utilisateur.
+- [ ] Gérer les **deux** binaires (`viewerkiller.exe`, `viewerkiller-gui.exe`).
+
+### Points de vigilance sécurité
+
+- Exécuter du code téléchargé = surface d'attaque réelle pour un outil qui se
+  veut sécurisé. TLS (API GitHub) + **checksum obligatoire** dès J16b.
+- Durcissement ultérieur : **signature minisign/cosign** (clé publique embarquée
+  dans le binaire) pour l'intégrité indépendamment de GitHub ; signature
+  Authenticode pour SmartScreen.
+
 ## Différé (hors cible LAN/VPN)
 
 - IPv6 (tout est IPv4, y compris `local_ipv4_addresses`).
