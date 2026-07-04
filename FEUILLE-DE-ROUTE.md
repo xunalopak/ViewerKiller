@@ -173,11 +173,12 @@ maîtrisées et un chemin auditable.
       et la journalise (`handle_connection`, host.rs) — fait en v0.1.6. (Le
       contrôleur reçoit encore un « code non reconnu » générique : un message
       dédié demanderait un champ de plus dans `ProbeResult`.)
-- [ ] Molette horizontale ignorée (`mouse_scroll` jette `dx`,
-      vk-platform/windows.rs → `MOUSEEVENTF_HWHEEL`).
+- [x] Molette horizontale (v0.1.12) : `mouse_scroll` transmet `dx` via
+      `MOUSEEVENTF_HWHEEL` (vk-platform/windows.rs).
 - [x] Le contrôleur envoie `Bye` à la fermeture locale (v0.1.9) : `input_rx`
       clos → `Bye` puis `SessionEnd::UserQuit` (chemin « Déconnecter » de la
       GUI, qui lâche `input_tx`). La fermeture de `events_rx` seule renvoie
       `UserQuit` sans `Bye`, mais la GUI lâche toujours les deux ensemble.
-- [ ] fps/qualité réglables dans la GUI (constantes en dur : 15 fps,
-      qualité 75).
+- [x] fps/qualité réglables dans la GUI (v0.1.12) : section « ⚙ Réglages
+      d'hébergement » sur l'accueil (sliders 5–30 img/s, qualité 40–95),
+      appliqués au démarrage de l'hébergement.

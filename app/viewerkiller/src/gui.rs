@@ -60,6 +60,9 @@ struct App {
     update_rx: std_mpsc::Receiver<viewerkiller::update::UpdateInfo>,
     /// Nouvelle version disponible, une fois la vérification aboutie.
     update_info: Option<viewerkiller::update::UpdateInfo>,
+    /// Réglages d'hébergement (modifiables sur l'accueil avant de démarrer).
+    host_fps: u32,
+    host_quality: u8,
 }
 
 impl App {
@@ -78,6 +81,8 @@ impl App {
             host_task: None,
             update_rx,
             update_info: None,
+            host_fps: 15,
+            host_quality: vk_media::DEFAULT_QUALITY,
         }
     }
 }
@@ -258,7 +263,8 @@ impl eframe::App for App {
                         ui.label("Contrôle à distance sécurisé, chiffré de bout en bout");
                         ui.add_space(40.0);
                         if ui.button("🖥  Héberger (être contrôlé)").clicked() {
-                            let (screen, task) = start_host(&self.rt);
+                            let (screen, task) =
+                                start_host(&self.rt, self.host_fps, self.host_quality);
                             next = Some(screen);
                             new_host_task = Some(task);
                         }
@@ -266,6 +272,24 @@ impl eframe::App for App {
                         if ui.button("🔗  Se connecter (contrôler)").clicked() {
                             next = Some(Screen::Connect(ConnectForm::default()));
                         }
+                        ui.add_space(18.0);
+                        ui.collapsing("⚙ Réglages d'hébergement", |ui| {
+                            ui.add(
+                                egui::Slider::new(&mut self.host_fps, 5..=30).text("Images / s"),
+                            );
+                            ui.add(
+                                egui::Slider::new(&mut self.host_quality, 40..=95)
+                                    .text("Qualité JPEG"),
+                            );
+                            ui.label(
+                                egui::RichText::new(
+                                    "Plus d'images/s et de qualité = plus fluide, mais plus de \
+                                     bande passante. À appliquer avant de démarrer l'hébergement.",
+                                )
+                                .weak()
+                                .small(),
+                            );
+                        });
                         if let Some(info) = &self.update_info {
                             ui.add_space(30.0);
                             ui.colored_label(
@@ -666,7 +690,11 @@ fn key_produces_text(key: egui::Key) -> bool {
 
 // --- Démarrage hôte / connexion -------------------------------------------
 
-fn start_host(rt: &tokio::runtime::Runtime) -> (Screen, tokio::task::JoinHandle<()>) {
+fn start_host(
+    rt: &tokio::runtime::Runtime,
+    fps: u32,
+    quality: u8,
+) -> (Screen, tokio::task::JoinHandle<()>) {
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), DEFAULT_PORT);
     let (code, password) = generate_credentials();
     let config = HostConfig {
@@ -675,8 +703,8 @@ fn start_host(rt: &tokio::runtime::Runtime) -> (Screen, tokio::task::JoinHandle<
         password: password.clone(),
         host_name: hostname(),
         tile_size: vk_media::DEFAULT_TILE_SIZE,
-        quality: vk_media::DEFAULT_QUALITY,
-        fps: 15,
+        quality,
+        fps,
         require_consent: true,
         share_clipboard: true,
     };

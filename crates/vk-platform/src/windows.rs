@@ -17,10 +17,10 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYBD_EVENT_FLAGS,
-    KEYEVENTF_KEYUP, KEYEVENTF_UNICODE, MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_LEFTDOWN,
-    MOUSEEVENTF_LEFTUP, MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, MOUSEEVENTF_MOVE,
-    MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL, MOUSEINPUT, MOUSE_EVENT_FLAGS,
-    VIRTUAL_KEY,
+    KEYEVENTF_KEYUP, KEYEVENTF_UNICODE, MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_HWHEEL,
+    MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP,
+    MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL, MOUSEINPUT,
+    MOUSE_EVENT_FLAGS, VIRTUAL_KEY,
 };
 use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
 
@@ -193,10 +193,14 @@ impl InputInjector for WindowsInjector {
         Ok(())
     }
 
-    fn mouse_scroll(&mut self, _dx: i32, dy: i32) -> anyhow::Result<()> {
+    fn mouse_scroll(&mut self, dx: i32, dy: i32) -> anyhow::Result<()> {
         // WHEEL_DELTA = 120 par cran ; dy positif = vers le haut.
         if dy != 0 {
             send_mouse(MOUSEEVENTF_WHEEL, 0, 0, dy * 120);
+        }
+        // Molette horizontale ; dx positif = vers la droite.
+        if dx != 0 {
+            send_mouse(MOUSEEVENTF_HWHEEL, 0, 0, dx * 120);
         }
         Ok(())
     }
