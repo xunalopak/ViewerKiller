@@ -1,6 +1,6 @@
 # ViewerKiller — recette runtime (à jouer sur 2 PC)
 
-> Cible : **v0.1.8** (protocole **v3**). Toute la chaîne est vérifiée en CI
+> Cible : **v0.1.12** (protocole **v4**). Toute la chaîne est vérifiée en CI
 > (compilation + tests Linux/Windows), mais la capture d'écran, l'injection
 > clavier/souris et le presse-papiers ne se valident qu'**en vrai, sur Windows**.
 > Rejouer cette liste à chaque release. Coche au fur et à mesure ; note le
@@ -10,8 +10,8 @@
 
 - [ ] **Même version sur les deux PC** : vérifie le **tag de la release**
       téléchargée (les binaires n'ont pas encore de flag `--version` — je peux
-      l'ajouter si utile). Protocole v3 → une v0.1.5 en face **refusera** la
-      connexion, c'est normal.
+      l'ajouter si utile). Protocole v4 → une version au protocole différent en
+      face **refusera** la connexion, c'est normal.
 - [ ] Les deux PC peuvent se joindre en TCP (même LAN, ou VPN, ou port
       redirigé). Récupère l'IP de la machine **hôte** : elle est affichée sur
       l'écran « Héberger » (Wi-Fi et Ethernet).
@@ -66,8 +66,11 @@ avant de lancer.
       coins et bords compris).
 - [ ] **5.2** **Clic gauche** (ouvrir un menu, un fichier), **clic droit** (menu
       contextuel), **double-clic**.
-- [ ] **5.3** **Molette** : défilement d'une page web / document dans les deux
-      sens. *(La molette horizontale n'est pas encore gérée — attendu.)*
+- [ ] **5.3** **Molette verticale** : défilement d'une page web / document dans
+      les deux sens.
+- [ ] **5.4** **Molette horizontale** (v0.1.12) : sur un tableur ou une page
+      large, le défilement **latéral** fonctionne (molette inclinable, ou
+      Shift+molette selon l'application).
 
 ## 6. Clavier (J8)
 
@@ -116,6 +119,16 @@ Synchro toutes les ~0,5 s dans les deux sens.
       nouveau code, et une reconnexion de PC-B fonctionne (pas d'ancien
       « listener fantôme » qui garderait l'ancien code).
 - [ ] **9.4** Reconnexion simple : PC-B « Déconnecter » puis se reconnecte.
+- [ ] **9.5** ⭐ **Reconnexion automatique (J13)** : session ouverte, **coupe le
+      réseau** de PC-B quelques secondes (Wi-Fi off / câble débranché, ou VPN
+      coupé) puis rétablis. PC-B doit afficher **« ⟳ Connexion perdue —
+      reconnexion… »**, garder la dernière image figée, puis **reprendre tout
+      seul** sans ressaisir code/mot de passe.
+- [ ] **9.6** **Détection de pair mort (keepalive/timeout)** : coupe le réseau de
+      PC-B et **ne le rétablis pas**. Côté PC-A, la session doit se fermer
+      d'elle-même (**~15 s**) et l'hôte se remettre en attente (pas de session
+      figée à l'infini). Inversement, si PC-A disparaît, PC-B finit par tenter la
+      reconnexion puis abandonne proprement.
 
 ## 10. GUI / ergonomie
 
@@ -126,6 +139,26 @@ Synchro toutes les ~0,5 s dans les deux sens.
 - [ ] **10.3** Les messages d'erreur (mauvais code/mdp, hôte injoignable)
       s'affichent proprement et « Retour à l'accueil » fonctionne.
 
+## 11. Notification de mise à jour (J16a)
+
+- [ ] **11.1** Au lancement, si une **release plus récente** existe sur GitHub,
+      l'accueil affiche **« ⬆ Nouvelle version disponible : vX.Y.Z »** + un lien
+      « Voir la release ». (Test : lance une version antérieure au dernier tag.)
+- [ ] **11.2** **Hors ligne / VPN isolé** (sans accès Internet) : le démarrage
+      **n'est pas ralenti** et **aucune erreur** n'apparaît (vérification
+      silencieuse, non bloquante).
+- [ ] **11.3** En **CLI**, `viewerkiller host` affiche une ligne
+      `ℹ Nouvelle version disponible…` le cas échéant.
+
+## 12. Réglages d'hébergement (v0.1.12)
+
+- [ ] **12.1** Sur l'accueil, déplie **« ⚙ Réglages d'hébergement »** : deux
+      curseurs **Images/s** (5–30) et **Qualité JPEG** (40–95).
+- [ ] **12.2** Règle **bas** (ex. 8 img/s, qualité 45) puis Héberger → image plus
+      granuleuse / moins fluide mais **moins de bande passante** ; règle **haut**
+      (ex. 30 img/s, qualité 90) → plus net/fluide, plus de débit. Les réglages
+      s'appliquent au **démarrage** de l'hébergement (pas en cours de session).
+
 ---
 
 ## Si un test échoue
@@ -133,4 +166,4 @@ Synchro toutes les ~0,5 s dans les deux sens.
 1. Note le **numéro** et ce que tu as vu (message exact, capture éventuelle).
 2. Si c'est côté hôte, relance l'hôte en **CLI** (`viewerkiller host`, au besoin
    `set RUST_LOG=debug`) pour capturer le journal d'audit et colle-le-moi.
-3. Précise si les **deux** PC sont bien en v0.1.8.
+3. Précise si les **deux** PC sont bien en v0.1.12.
