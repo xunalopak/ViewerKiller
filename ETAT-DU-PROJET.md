@@ -4,7 +4,7 @@
 > connectent **directement** par IP + port, sans serveur de rendez-vous.
 > Chiffrement bout-en-bout (Noise), code de connexion + mot de passe.
 
-Dernière mise à jour : **2026-07-03**. Plan détaillé :
+Dernière mise à jour : **2026-07-04** (v0.1.9, J13 reconnexion). Plan détaillé :
 `~/.claude/plans/j-aimerai-construire-une-alternative-peaceful-castle.md`.
 
 ## Décisions verrouillées
@@ -49,13 +49,18 @@ crates/vk-net/       frame.rs (cadrage async clair), transport.rs (EncryptedStre
 crates/vk-media/     TileEncoder (diff+JPEG) + FrameBuffer (décode→RGBA)
 app/viewerkiller/    lib : host.rs, controller.rs, security.rs
                      bin : main.rs (CLI viewerkiller), gui.rs (viewerkiller-gui, egui)
-                     tests : e2e.rs, hardening.rs
+                     tests : e2e.rs, hardening.rs, reconnect.rs
 ```
 
 > Note perf (v0.1.8, J10) : l'encodage JPEG de `host_session` tourne désormais
 > dans `spawn_blocking` (ne monopolise plus un thread ouvrier) et le ticker de
 > trames est en `MissedTickBehavior::Skip` (cadence adaptative, pas
 > d'accumulation sous charge). Optimisation restante = capture DXGI (J10b).
+
+> Note robustesse (v0.1.9, J13) : keepalive `Ping` bidirectionnel +
+> chien de garde `SESSION_TIMEOUT` (15 s) des deux côtés, et reconnexion
+> automatique côté contrôleur (`run_controller` + `ReconnectPolicy`, backoff
+> exponentiel). Voir [`FEUILLE-DE-ROUTE.md`](FEUILLE-DE-ROUTE.md) J13.
 
 ## Format réseau (rappel)
 1. Connexion TCP directe du contrôleur vers `ip:port` de l'hôte, puis
@@ -64,12 +69,13 @@ app/viewerkiller/    lib : host.rs, controller.rs, security.rs
 2. Handshake Noise `NNpsk0` (PSK = `blake3::derive_key(password)`), enregistrements
    `[u16 len][texte chiffré]`.
 3. Session : messages applicatifs cadrés u32, fragmentés en enregistrements Noise
-   ≤ 65519 o. Hôte→ctrl = `HostMessage` (ScreenInfo, Frame), ctrl→hôte =
-   `ControllerMessage` (Input, RequestFullFrame, Bye).
+   ≤ 65519 o. Hôte→ctrl = `HostMessage` (ScreenInfo, Frame, Clipboard, Ping),
+   ctrl→hôte = `ControllerMessage` (Input, RequestFullFrame, Clipboard, Ping,
+   Bye). Ping toutes les 5 s ; session fermée si le pair est muet > 15 s.
 
 ## Build & test
 ```bash
-cargo test --workspace      # 28 tests, tous verts sur Linux
+cargo test --workspace      # 30 tests, tous verts sur Linux
 cargo build --workspace
 # Vérif du code Windows (#[cfg(windows)]) sans machine Windows, type-check seul :
 rustup target add x86_64-pc-windows-gnu
@@ -94,11 +100,12 @@ et la perf :
    écran fluide ; tuiles natives « dirty rects ».
 
 ## Pièges connus / notes
-- **PROTO_VERSION = 3** : v0.1.5 = `InputEvent::Char` (texte Unicode, J8) ;
-  v0.1.7 = messages `Clipboard` hôte/contrôleur (presse-papiers, J11). Les deux
-  machines doivent exécuter la même version. Les nouveaux variants d'enum
-  s'ajoutent **en fin** (postcard encode le discriminant par ordre de
-  déclaration) ; l'hôte refuse et journalise une version incompatible.
+- **PROTO_VERSION = 4** : v0.1.5 = `InputEvent::Char` (texte Unicode, J8) ;
+  v0.1.7 = messages `Clipboard` hôte/contrôleur (presse-papiers, J11) ;
+  v0.1.9 = messages `Ping` keepalive (J13). Les deux machines doivent exécuter
+  la même version. Les nouveaux variants d'enum s'ajoutent **en fin** (postcard
+  encode le discriminant par ordre de déclaration) ; l'hôte refuse et journalise
+  une version incompatible.
 - `TileCodec` a été renommé `ZstdRgba` → `DeflateBgra` (deflate pur Rust, pas de
   dépendance C). JPEG = chemin par défaut de `TileEncoder`.
 - `snow::Builder::psk()` renvoie `Builder` (pas de `?`).

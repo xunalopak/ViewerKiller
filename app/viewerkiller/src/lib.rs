@@ -10,7 +10,9 @@ pub mod controller;
 pub mod host;
 pub mod security;
 
-pub use controller::{controller_session, ControllerConfig, SessionEvent};
+pub use controller::{
+    controller_session, run_controller, ControllerConfig, ReconnectPolicy, SessionEnd, SessionEvent,
+};
 pub use host::{handle_connection, serve, ConnectionOutcome, HostConfig};
 pub use security::{AutoAccept, BruteForceGuard, Consent, ConsentFuture, RejectAll};
 

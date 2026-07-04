@@ -11,7 +11,7 @@ use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
-use viewerkiller::{controller_session, ControllerConfig, HostConfig, SessionEvent};
+use viewerkiller::{run_controller, ControllerConfig, HostConfig, ReconnectPolicy, SessionEvent};
 use vk_core::protocol::InputEvent;
 use vk_media::FrameBuffer;
 use vk_platform::{Frame, InputInjector, ScreenCapturer};
@@ -131,7 +131,15 @@ async fn full_pipeline_screen_and_input() {
 
     let (events_tx, mut events_rx) = mpsc::unbounded_channel();
     let (input_tx, input_rx) = mpsc::unbounded_channel();
-    let session = tokio::spawn(controller_session(enc, events_tx, input_rx, false));
+    let session = tokio::spawn(run_controller(
+        enc,
+        addr,
+        cfg,
+        events_tx,
+        input_rx,
+        false,
+        ReconnectPolicy::disabled(),
+    ));
 
     // 1. Géométrie de l'écran.
     let mut fb = match events_rx.recv().await.unwrap() {
@@ -149,6 +157,7 @@ async fn full_pipeline_screen_and_input() {
                 frames += 1;
             }
             SessionEvent::ScreenInfo { .. } => {}
+            SessionEvent::Reconnecting => {}
             SessionEvent::Disconnected => panic!("déconnexion prématurée"),
         }
     }

@@ -153,6 +153,15 @@ mod tests {
     }
 
     #[test]
+    fn keepalive_messages_round_trip() {
+        assert_eq!(
+            round_trip(&ControllerMessage::Ping),
+            ControllerMessage::Ping
+        );
+        assert_eq!(round_trip(&HostMessage::Ping), HostMessage::Ping);
+    }
+
+    #[test]
     fn oversize_length_prefix_rejected() {
         let mut reader = FrameReader::new();
         let bogus = ((MAX_FRAME_LEN + 1) as u32).to_be_bytes();

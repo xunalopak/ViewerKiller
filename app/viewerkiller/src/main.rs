@@ -17,8 +17,8 @@ use anyhow::{Context, Result};
 use tokio::sync::mpsc;
 
 use viewerkiller::{
-    controller::connect_to, controller_session, generate_credentials, serve, AutoAccept,
-    BruteForceGuard, ControllerConfig, HostConfig, SessionEvent,
+    controller::connect_to, generate_credentials, run_controller, serve, AutoAccept,
+    BruteForceGuard, ControllerConfig, HostConfig, ReconnectPolicy, SessionEvent,
 };
 use vk_core::protocol::DEFAULT_PORT;
 use vk_media::FrameBuffer;
@@ -120,7 +120,15 @@ async fn run_connect(code: String, password: String, addr: SocketAddr) -> Result
 
     let (events_tx, mut events_rx) = mpsc::unbounded_channel();
     let (_input_tx, input_rx) = mpsc::unbounded_channel();
-    let session = tokio::spawn(controller_session(enc, events_tx, input_rx, true));
+    let session = tokio::spawn(run_controller(
+        enc,
+        addr,
+        config,
+        events_tx,
+        input_rx,
+        true,
+        ReconnectPolicy::default(),
+    ));
 
     let mut fb: Option<FrameBuffer> = None;
     let mut frames = 0u64;
@@ -138,6 +146,9 @@ async fn run_connect(code: String, password: String, addr: SocketAddr) -> Result
                 if frames % 15 == 0 {
                     tracing::info!(frames, "trames reçues");
                 }
+            }
+            SessionEvent::Reconnecting => {
+                tracing::warn!("connexion perdue — reconnexion en cours…");
             }
             SessionEvent::Disconnected => {
                 tracing::info!("session terminée");

@@ -1,12 +1,25 @@
 //! Définition du protocole ViewerKiller : messages de découverte et de session.
 
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 
 /// Version du protocole, incrémentée à chaque changement incompatible.
-pub const PROTO_VERSION: u16 = 3;
+pub const PROTO_VERSION: u16 = 4;
 
 /// Port TCP par défaut de l'agent hôte.
 pub const DEFAULT_PORT: u16 = 47600;
+
+/// Intervalle d'émission des messages de maintien de session
+/// ([`ControllerMessage::Ping`] / [`HostMessage::Ping`]). Chaque pair émet un
+/// Ping quand il n'a rien d'autre à envoyer, prouvant à l'autre que la connexion
+/// est vivante même écran figé et sans saisie.
+pub const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(5);
+
+/// Sans **aucun** message reçu du pair pendant ce délai, la session est réputée
+/// morte (VPN coupé, machine éteinte, câble débranché…) et fermée. Doit rester
+/// nettement supérieur à [`KEEPALIVE_INTERVAL`] pour tolérer quelques pertes.
+pub const SESSION_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Messages échangés AVANT la session chiffrée, pour la vérification du code
 /// de connexion.
@@ -100,6 +113,8 @@ pub enum ControllerMessage {
     /// Le presse-papiers texte du contrôleur a changé (synchronisation façon
     /// RDP). Variant ajouté **en fin d'enum** (postcard, ordre = discriminant).
     Clipboard(String),
+    /// Maintien de connexion (keepalive). Variant ajouté **en fin d'enum**.
+    Ping,
 }
 
 /// Messages hôte → contrôleur durant une session chiffrée.
@@ -116,4 +131,6 @@ pub enum HostMessage {
     /// Le presse-papiers texte de l'hôte a changé (synchronisation façon RDP).
     /// Variant ajouté **en fin d'enum** (postcard, ordre = discriminant).
     Clipboard(String),
+    /// Maintien de connexion (keepalive). Variant ajouté **en fin d'enum**.
+    Ping,
 }

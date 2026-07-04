@@ -74,10 +74,27 @@ l'autre.
 - [ ] Forme réelle du curseur (`CURSORINFO` / DXGI pointer shape) dessinée
       côté contrôleur.
 
-## J13 — Reconnexion & robustesse
+## J13 — Reconnexion & robustesse — **fait (v0.1.9)**
 
-- [ ] Retry automatique côté contrôleur (backoff, mêmes identifiants).
-- [ ] Ping/keepalive protocolaire + timeouts de session.
+Une coupure (VPN qui tombe, machine mise en veille) laissait auparavant la
+session figée indéfiniment : TCP met très longtemps à signaler un pair disparu.
+
+- [x] Keepalive protocolaire : `ControllerMessage::Ping` / `HostMessage::Ping`
+      (fin d'enum) ; `PROTO_VERSION` → 4. Chaque pair émet un Ping toutes les
+      `KEEPALIVE_INTERVAL` (5 s) quand il n'a rien d'autre à envoyer.
+- [x] Chien de garde : sans **aucun** message reçu pendant `SESSION_TIMEOUT`
+      (15 s), la session est fermée des deux côtés (`host_session` et
+      `controller_session`) — détection en ~15-20 s au lieu de plusieurs minutes.
+- [x] Reconnexion automatique côté contrôleur : `controller_session` renvoie un
+      `SessionEnd` (`UserQuit` / `HostClosed` / `Dropped`) ; l'orchestrateur
+      `run_controller` relance `connect_to` (même adresse + mêmes identifiants)
+      avec backoff exponentiel (`ReconnectPolicy` : 1→10 s, 10 essais par
+      défaut). Une fin propre (`Bye`) ou locale ne déclenche pas de reconnexion.
+- [x] GUI : bannière « ⟳ Connexion perdue — reconnexion… » via
+      `SessionEvent::Reconnecting` ; l'écran distant figé reste affiché et la
+      session reprend d'elle-même, sans ressaisir code/mot de passe.
+- [x] Test d'intégration `controller_reconnects_after_drop` (coupure simulée →
+      reconnexion → reprise) + round-trip codec des `Ping`.
 
 ## J14 — Codec vidéo H.264
 
@@ -147,7 +164,9 @@ maîtrisées et un chemin auditable.
       dédié demanderait un champ de plus dans `ProbeResult`.)
 - [ ] Molette horizontale ignorée (`mouse_scroll` jette `dx`,
       vk-platform/windows.rs → `MOUSEEVENTF_HWHEEL`).
-- [ ] Le contrôleur n'envoie pas `Bye` quand l'UI ferme `events_rx`
-      (controller.rs, branche `is_err()`).
+- [x] Le contrôleur envoie `Bye` à la fermeture locale (v0.1.9) : `input_rx`
+      clos → `Bye` puis `SessionEnd::UserQuit` (chemin « Déconnecter » de la
+      GUI, qui lâche `input_tx`). La fermeture de `events_rx` seule renvoie
+      `UserQuit` sans `Bye`, mais la GUI lâche toujours les deux ensemble.
 - [ ] fps/qualité réglables dans la GUI (constantes en dur : 15 fps,
       qualité 75).

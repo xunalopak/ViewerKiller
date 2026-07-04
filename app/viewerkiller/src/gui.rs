@@ -17,8 +17,8 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot;
 
 use viewerkiller::{
-    controller::connect_to, controller_session, generate_credentials, local_ipv4_addresses, serve,
-    BruteForceGuard, ControllerConfig, HostConfig, SessionEvent,
+    controller::connect_to, generate_credentials, local_ipv4_addresses, run_controller, serve,
+    BruteForceGuard, ControllerConfig, HostConfig, ReconnectPolicy, SessionEvent,
 };
 use vk_core::protocol::{InputEvent, MouseButton, DEFAULT_PORT};
 use vk_media::FrameBuffer;
@@ -157,6 +157,8 @@ struct SessionScreen {
     /// Dernier état des modificateurs envoyé à l'hôte (suivi par transitions).
     mods: egui::Modifiers,
     disconnected: bool,
+    /// Connexion perdue, reconnexion automatique en cours (bannière).
+    reconnecting: bool,
 }
 
 impl SessionScreen {
@@ -175,6 +177,7 @@ impl SessionScreen {
             secondary_down: false,
             mods: egui::Modifiers::default(),
             disconnected: false,
+            reconnecting: false,
         }
     }
 
@@ -186,6 +189,7 @@ impl SessionScreen {
                     self.fb = Some(FrameBuffer::new(width, height));
                     self.remote_size = Some((width, height));
                     self.dirty = true;
+                    self.reconnecting = false; // une reconnexion vient d'aboutir
                 }
                 SessionEvent::Frame(update) => {
                     if let Some(fb) = self.fb.as_mut() {
@@ -194,6 +198,7 @@ impl SessionScreen {
                         }
                     }
                 }
+                SessionEvent::Reconnecting => self.reconnecting = true,
                 SessionEvent::Disconnected => self.disconnected = true,
             }
         }
@@ -402,6 +407,12 @@ impl eframe::App for App {
                                 ui.label(format!("Écran distant {w}×{h}"));
                             } else {
                                 ui.label("Connexion établie…");
+                            }
+                            if session.reconnecting {
+                                ui.colored_label(
+                                    egui::Color32::from_rgb(0xE0, 0xB0, 0x40),
+                                    "⟳ Connexion perdue — reconnexion…",
+                                );
                             }
                             if ui.button("Déconnecter").clicked() {
                                 // Relâche les modificateurs tenus, sinon l'hôte
@@ -704,7 +715,15 @@ fn start_connect(rt: &tokio::runtime::Runtime, form: &ConnectForm) -> Result<Scr
             Ok(enc) => {
                 let (events_tx, events_rx) = mpsc::unbounded_channel();
                 let (input_tx, input_rx) = mpsc::unbounded_channel();
-                tokio::spawn(controller_session(enc, events_tx, input_rx, true));
+                tokio::spawn(run_controller(
+                    enc,
+                    addr,
+                    config,
+                    events_tx,
+                    input_rx,
+                    true,
+                    ReconnectPolicy::default(),
+                ));
                 let _ = tx.send(ConnectResult::Ready {
                     events_rx,
                     input_tx,

@@ -6,14 +6,15 @@
 //! consentement après authentification, et journal d'audit (cible `audit`).
 
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use tokio::net::{TcpListener, TcpStream};
 
 use vk_core::crypto::derive_psk;
 use vk_core::protocol::{
-    ControllerMessage, DiscoveryMessage, HostMessage, InputEvent, PROTO_VERSION,
+    ControllerMessage, DiscoveryMessage, HostMessage, InputEvent, KEEPALIVE_INTERVAL,
+    PROTO_VERSION, SESSION_TIMEOUT,
 };
 use vk_media::TileEncoder;
 use vk_net::frame::{read_framed, write_framed};
@@ -194,6 +195,15 @@ async fn host_session(
     let mut clip_ticker = tokio::time::interval(CLIPBOARD_POLL);
     clip_ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
+    // Maintien de connexion : on émet un Ping périodique, et un chien de garde
+    // ferme la session si plus rien n'arrive du contrôleur — détecte une coupure
+    // (VPN tombé, contrôleur éteint) que TCP mettrait très longtemps à remonter.
+    let mut keepalive = tokio::time::interval(KEEPALIVE_INTERVAL);
+    keepalive.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut watchdog = tokio::time::interval(KEEPALIVE_INTERVAL);
+    watchdog.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut last_rx = Instant::now();
+
     loop {
         tokio::select! {
             _ = ticker.tick() => {
@@ -220,7 +230,17 @@ async fn host_session(
                     enc.send(&HostMessage::Clipboard(text)).await?;
                 }
             }
+            _ = keepalive.tick() => {
+                enc.send(&HostMessage::Ping).await?;
+            }
+            _ = watchdog.tick() => {
+                if last_rx.elapsed() > SESSION_TIMEOUT {
+                    tracing::warn!(target: "audit", "session fermée : contrôleur silencieux (délai dépassé)");
+                    break;
+                }
+            }
             msg = enc.recv::<ControllerMessage>() => {
+                last_rx = Instant::now();
                 match msg? {
                     ControllerMessage::Input(ev) => apply_input(injector.as_mut(), ev)?,
                     ControllerMessage::RequestFullFrame => encoder.force_full_frame(),
@@ -229,6 +249,7 @@ async fn host_session(
                             c.apply_remote(text);
                         }
                     }
+                    ControllerMessage::Ping => {}
                     ControllerMessage::Bye => {
                         tracing::info!("contrôleur déconnecté");
                         break;
