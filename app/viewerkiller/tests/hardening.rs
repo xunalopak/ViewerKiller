@@ -220,3 +220,48 @@ async fn accepted_session_reports_end() {
     // La fin de session a bien été signalée une fois.
     assert_eq!(log.0.lock().unwrap().len(), 1);
 }
+
+/// Un contrôleur qui disparaît **sans** `Bye` (fermeture brutale, coupure réseau)
+/// ne doit pas faire échouer la session hôte : elle se termine proprement
+/// (`Completed`) et l'hôte peut repartir en écoute. Régression du correctif
+/// v0.1.11 : sous Windows, un RST à la fermeture peut effacer le `Bye` en vol, et
+/// le keepalive (v0.1.9) laisse un `Ping` non lu côté contrôleur qui provoque ce
+/// RST — l'hôte recevait alors une erreur propagée en échec au lieu d'une fin
+/// normale.
+#[tokio::test]
+async fn abrupt_controller_disconnect_completes_gracefully() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let config = host_config(addr, false);
+
+    let mut guard = BruteForceGuard::new(5, Duration::from_secs(60));
+    let mut consent = AutoAccept;
+
+    let cfg = ControllerConfig {
+        code: "111222".into(),
+        password: "bon-mot-de-passe".into(),
+        port: addr.port(),
+    };
+    // S'authentifie, reçoit la géométrie, puis lâche la connexion sans Bye.
+    let ctrl = tokio::spawn(async move {
+        let mut enc = viewerkiller::controller::connect_to(addr, &cfg)
+            .await
+            .unwrap();
+        let _: HostMessage = enc.recv().await.unwrap(); // ScreenInfo
+                                                        // `enc` lâché ici → fermeture brutale, aucun Bye.
+    });
+
+    let (stream, _) = listener.accept().await.unwrap();
+    let outcome = viewerkiller::handle_connection(
+        stream,
+        &config,
+        &mut guard,
+        &mut consent,
+        capturer(),
+        injector(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome, ConnectionOutcome::Completed);
+    ctrl.await.unwrap();
+}

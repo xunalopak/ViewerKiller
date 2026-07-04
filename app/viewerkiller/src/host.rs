@@ -220,18 +220,24 @@ async fn host_session(
                     .await?;
                     encoder = returned;
                     let update = update.map_err(anyhow::Error::msg)?;
-                    if !update.tiles.is_empty() {
-                        enc.send(&HostMessage::Frame(update)).await?;
+                    if !update.tiles.is_empty()
+                        && enc.send(&HostMessage::Frame(update)).await.is_err()
+                    {
+                        break; // contrôleur parti
                     }
                 }
             }
             _ = clip_ticker.tick(), if clipboard.is_some() => {
                 if let Some(text) = clipboard.as_mut().and_then(ClipboardSync::poll_local) {
-                    enc.send(&HostMessage::Clipboard(text)).await?;
+                    if enc.send(&HostMessage::Clipboard(text)).await.is_err() {
+                        break; // contrôleur parti
+                    }
                 }
             }
             _ = keepalive.tick() => {
-                enc.send(&HostMessage::Ping).await?;
+                if enc.send(&HostMessage::Ping).await.is_err() {
+                    break; // contrôleur parti
+                }
             }
             _ = watchdog.tick() => {
                 if last_rx.elapsed() > SESSION_TIMEOUT {
@@ -241,7 +247,17 @@ async fn host_session(
             }
             msg = enc.recv::<ControllerMessage>() => {
                 last_rx = Instant::now();
-                match msg? {
+                // Contrôleur parti (fermeture, reset réseau — sous Windows un RST
+                // à la fermeture peut effacer le `Bye` en vol) : fin de session
+                // normale, pas une erreur fatale ; on repart en écoute.
+                let msg = match msg {
+                    Ok(m) => m,
+                    Err(e) => {
+                        tracing::debug!("réception interrompue (contrôleur parti) : {e:#}");
+                        break;
+                    }
+                };
+                match msg {
                     ControllerMessage::Input(ev) => apply_input(injector.as_mut(), ev)?,
                     ControllerMessage::RequestFullFrame => encoder.force_full_frame(),
                     ControllerMessage::Clipboard(text) => {

@@ -95,6 +95,11 @@ session figée indéfiniment : TCP met très longtemps à signaler un pair dispa
       session reprend d'elle-même, sans ressaisir code/mot de passe.
 - [x] Test d'intégration `controller_reconnects_after_drop` (coupure simulée →
       reconnexion → reprise) + round-trip codec des `Ping`.
+- [x] Fin de session robuste côté hôte (v0.1.11) : une perte de connexion
+      (fermeture, reset réseau) termine la session proprement au lieu de propager
+      une erreur. Sous Windows, un RST à la fermeture peut effacer le `Bye` en vol
+      (aggravé par le `Ping` keepalive laissé non lu) — l'hôte le traite désormais
+      comme une fin normale. Régression : `abrupt_controller_disconnect_completes_gracefully`.
 
 ## J14 — Codec vidéo H.264
 
