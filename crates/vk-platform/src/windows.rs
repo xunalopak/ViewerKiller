@@ -9,11 +9,12 @@
 
 use std::mem::size_of;
 
-use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT, TRUE};
 use windows::Win32::Graphics::Gdi::{
-    BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC, GetDIBits,
-    ReleaseDC, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HBITMAP, HDC,
-    HGDIOBJ, SRCCOPY,
+    BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject,
+    EnumDisplayMonitors, GetDC, GetDIBits, GetMonitorInfoW, ReleaseDC, SelectObject, BITMAPINFO,
+    BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HBITMAP, HDC, HGDIOBJ, HMONITOR, MONITORINFO,
+    SRCCOPY,
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYBD_EVENT_FLAGS,
@@ -25,11 +26,76 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
 
 use crate::{Clipboard, Frame, InputInjector, ScreenCapturer};
-use vk_core::protocol::MouseButton;
+use vk_core::protocol::{MonitorInfo, MouseButton};
 
-/// Capture de l'écran principal par copie GDI (BGRA).
-pub struct WindowsCapturer {
+/// Drapeau `dwFlags` marquant le moniteur principal. Non exposé nommément par le
+/// crate `windows` 0.58 ; valeur stable de l'API Win32.
+const MONITORINFOF_PRIMARY: u32 = 0x0000_0001;
+
+/// Un moniteur physique en coordonnées du bureau virtuel.
+struct MonitorRect {
+    left: i32,
+    top: i32,
     width: i32,
+    height: i32,
+    primary: bool,
+}
+
+/// Callback `EnumDisplayMonitors` : empile chaque moniteur dans le `Vec` passé
+/// via `lparam`.
+unsafe extern "system" fn enum_monitor(
+    hmon: HMONITOR,
+    _hdc: HDC,
+    _clip: *mut RECT,
+    lparam: LPARAM,
+) -> BOOL {
+    let monitors = &mut *(lparam.0 as *mut Vec<MonitorRect>);
+    let mut info = MONITORINFO {
+        cbSize: size_of::<MONITORINFO>() as u32,
+        ..Default::default()
+    };
+    if GetMonitorInfoW(hmon, &mut info).as_bool() {
+        let r = info.rcMonitor;
+        monitors.push(MonitorRect {
+            left: r.left,
+            top: r.top,
+            width: r.right - r.left,
+            height: r.bottom - r.top,
+            primary: (info.dwFlags & MONITORINFOF_PRIMARY) != 0,
+        });
+    }
+    TRUE
+}
+
+/// Énumère les moniteurs du bureau virtuel (coordonnées incluses).
+fn enumerate_monitors() -> Vec<MonitorRect> {
+    let mut monitors: Vec<MonitorRect> = Vec::new();
+    unsafe {
+        let _ = EnumDisplayMonitors(
+            HDC::default(),
+            None,
+            Some(enum_monitor),
+            LPARAM(&mut monitors as *mut _ as isize),
+        );
+    }
+    monitors
+}
+
+/// Crée un DC mémoire + un bitmap compatibles de la taille demandée, prêts pour
+/// `BitBlt`.
+unsafe fn create_target(screen_dc: HDC, width: i32, height: i32) -> (HDC, HBITMAP) {
+    let mem_dc = CreateCompatibleDC(screen_dc);
+    let bitmap = CreateCompatibleBitmap(screen_dc, width, height);
+    SelectObject(mem_dc, HGDIOBJ(bitmap.0));
+    (mem_dc, bitmap)
+}
+
+/// Capture d'un moniteur par copie GDI (BGRA). Gère plusieurs écrans (J12) : la
+/// capture copie le rectangle du moniteur sélectionné dans le bureau virtuel.
+pub struct WindowsCapturer {
+    monitors: Vec<MonitorRect>,
+    selected: usize,
+    width: i32, // dimensions du moniteur sélectionné
     height: i32,
     screen_dc: HDC,
     mem_dc: HDC,
@@ -39,19 +105,32 @@ pub struct WindowsCapturer {
 impl WindowsCapturer {
     pub fn new() -> anyhow::Result<Self> {
         unsafe {
-            let width = GetSystemMetrics(SM_CXSCREEN);
-            let height = GetSystemMetrics(SM_CYSCREEN);
-            if width <= 0 || height <= 0 {
-                anyhow::bail!("dimensions d'écran invalides ({width}x{height})");
+            let mut monitors = enumerate_monitors();
+            if monitors.is_empty() {
+                // Repli si l'énumération échoue : moniteur principal seul.
+                let width = GetSystemMetrics(SM_CXSCREEN);
+                let height = GetSystemMetrics(SM_CYSCREEN);
+                if width <= 0 || height <= 0 {
+                    anyhow::bail!("dimensions d'écran invalides ({width}x{height})");
+                }
+                monitors.push(MonitorRect {
+                    left: 0,
+                    top: 0,
+                    width,
+                    height,
+                    primary: true,
+                });
             }
+            let selected = monitors.iter().position(|m| m.primary).unwrap_or(0);
             let screen_dc = GetDC(HWND::default());
             if screen_dc.is_invalid() {
                 anyhow::bail!("GetDC a échoué");
             }
-            let mem_dc = CreateCompatibleDC(screen_dc);
-            let bitmap = CreateCompatibleBitmap(screen_dc, width, height);
-            SelectObject(mem_dc, HGDIOBJ(bitmap.0));
+            let (width, height) = (monitors[selected].width, monitors[selected].height);
+            let (mem_dc, bitmap) = create_target(screen_dc, width, height);
             Ok(Self {
+                monitors,
+                selected,
                 width,
                 height,
                 screen_dc,
@@ -82,6 +161,10 @@ impl ScreenCapturer for WindowsCapturer {
 
     fn capture(&mut self) -> anyhow::Result<Option<Frame>> {
         unsafe {
+            let (src_x, src_y) = {
+                let m = &self.monitors[self.selected];
+                (m.left, m.top)
+            };
             BitBlt(
                 self.mem_dc,
                 0,
@@ -89,8 +172,8 @@ impl ScreenCapturer for WindowsCapturer {
                 self.width,
                 self.height,
                 self.screen_dc,
-                0,
-                0,
+                src_x,
+                src_y,
                 SRCCOPY,
             )?;
 
@@ -132,6 +215,42 @@ impl ScreenCapturer for WindowsCapturer {
                 data,
             }))
         }
+    }
+
+    fn monitors(&self) -> Vec<MonitorInfo> {
+        self.monitors
+            .iter()
+            .enumerate()
+            .map(|(i, m)| MonitorInfo {
+                index: i as u32,
+                width: m.width as u32,
+                height: m.height as u32,
+                primary: m.primary,
+            })
+            .collect()
+    }
+
+    fn select_monitor(&mut self, index: u32) -> anyhow::Result<()> {
+        let idx = index as usize;
+        if idx >= self.monitors.len() {
+            anyhow::bail!("moniteur {index} inexistant");
+        }
+        if idx == self.selected {
+            return Ok(());
+        }
+        let (width, height) = (self.monitors[idx].width, self.monitors[idx].height);
+        unsafe {
+            // Recrée la cible GDI à la taille du nouveau moniteur.
+            let _ = DeleteObject(HGDIOBJ(self.bitmap.0));
+            let _ = DeleteDC(self.mem_dc);
+            let (mem_dc, bitmap) = create_target(self.screen_dc, width, height);
+            self.mem_dc = mem_dc;
+            self.bitmap = bitmap;
+        }
+        self.selected = idx;
+        self.width = width;
+        self.height = height;
+        Ok(())
     }
 }
 

@@ -5,7 +5,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 /// Version du protocole, incrémentée à chaque changement incompatible.
-pub const PROTO_VERSION: u16 = 4;
+pub const PROTO_VERSION: u16 = 5;
 
 /// Port TCP par défaut de l'agent hôte.
 pub const DEFAULT_PORT: u16 = 47600;
@@ -103,6 +103,17 @@ pub struct FrameUpdate {
     pub tiles: Vec<Tile>,
 }
 
+/// Description d'un moniteur de l'hôte, pour le choix côté contrôleur (J12).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MonitorInfo {
+    /// Index stable (0 = premier moniteur) utilisé pour la sélection.
+    pub index: u32,
+    pub width: u32,
+    pub height: u32,
+    /// Vrai pour le moniteur principal.
+    pub primary: bool,
+}
+
 /// Messages contrôleur → hôte durant une session chiffrée.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ControllerMessage {
@@ -115,6 +126,10 @@ pub enum ControllerMessage {
     Clipboard(String),
     /// Maintien de connexion (keepalive). Variant ajouté **en fin d'enum**.
     Ping,
+    /// Demande de bascule vers le moniteur `index` (J12). **Fin d'enum.**
+    SelectMonitor {
+        index: u32,
+    },
 }
 
 /// Messages hôte → contrôleur durant une session chiffrée.
@@ -133,4 +148,7 @@ pub enum HostMessage {
     Clipboard(String),
     /// Maintien de connexion (keepalive). Variant ajouté **en fin d'enum**.
     Ping,
+    /// Liste des moniteurs disponibles, envoyée en début de session (J12).
+    /// **Fin d'enum.**
+    Monitors(Vec<MonitorInfo>),
 }

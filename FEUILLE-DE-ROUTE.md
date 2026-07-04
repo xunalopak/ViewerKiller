@@ -68,11 +68,20 @@ l'autre.
       `HostConfig.share_clipboard` (hôte) et le paramètre `share_clipboard` de
       `controller_session` ; désactivé dans les tests.
 
-## J12 — Multi-écrans + curseur distant
+## J12 — Multi-écrans + curseur distant — **multi-écrans fait (v0.1.14)**
 
-- [ ] Énumération des moniteurs, choix côté contrôleur (message de sélection).
-- [ ] Forme réelle du curseur (`CURSORINFO` / DXGI pointer shape) dessinée
-      côté contrôleur.
+- [x] Énumération des moniteurs (Windows `EnumDisplayMonitors`) + choix côté
+      contrôleur : `HostMessage::Monitors` en début de session,
+      `ControllerMessage::SelectMonitor { index }` ; `PROTO_VERSION` → 5. Bascule
+      à chaud (nouvelle géométrie → `TileEncoder` repart en trame pleine).
+      Sélecteur d'écran dans la barre de session GUI (affiché si >1 moniteur).
+      Capture du rectangle du moniteur dans le bureau virtuel (`BitBlt`). Trait
+      `ScreenCapturer::monitors`/`select_monitor` (défaut mono-écran). Testé via
+      stub 2 moniteurs (`tests/multiscreen.rs`, bascule end-to-end) ; **la capture
+      Windows multi-moniteur reste à valider au runtime**.
+- [ ] Forme réelle du curseur (`CURSORINFO`) dessinée côté contrôleur (reste à
+      faire — GDI ne capture pas le curseur ; le curseur local du contrôleur
+      donne un repère approximatif en attendant).
 
 ## J13 — Reconnexion & robustesse — **fait (v0.1.9)**
 

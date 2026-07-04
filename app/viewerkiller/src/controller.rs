@@ -10,8 +10,8 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use vk_core::crypto::derive_psk;
 use vk_core::protocol::{
-    ControllerMessage, DiscoveryMessage, FrameUpdate, HostMessage, InputEvent, KEEPALIVE_INTERVAL,
-    PROTO_VERSION, SESSION_TIMEOUT,
+    ControllerMessage, DiscoveryMessage, FrameUpdate, HostMessage, InputEvent, MonitorInfo,
+    KEEPALIVE_INTERVAL, PROTO_VERSION, SESSION_TIMEOUT,
 };
 use vk_net::frame::{read_framed, write_framed};
 use vk_net::transport::EncryptedStream;
@@ -37,6 +37,8 @@ pub enum SessionEvent {
         height: u32,
     },
     Frame(FrameUpdate),
+    /// Liste des moniteurs de l'hôte (choix multi-écrans, J12).
+    Monitors(Vec<MonitorInfo>),
     /// La connexion a été perdue ; une reconnexion automatique est en cours.
     Reconnecting,
     Disconnected,
@@ -127,6 +129,7 @@ pub async fn controller_session(
     mut enc: EncryptedStream<TcpStream>,
     events_tx: &UnboundedSender<SessionEvent>,
     input_rx: &mut UnboundedReceiver<InputEvent>,
+    monitor_rx: &mut UnboundedReceiver<u32>,
     share_clipboard: bool,
 ) -> SessionEnd {
     let mut clipboard =
@@ -138,6 +141,7 @@ pub async fn controller_session(
     let mut watchdog = tokio::time::interval(KEEPALIVE_INTERVAL);
     watchdog.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut last_rx = Instant::now();
+    let mut monitor_open = true;
 
     loop {
         tokio::select! {
@@ -158,6 +162,9 @@ pub async fn controller_session(
                         }
                     }
                     Ok(HostMessage::Ping) => {}
+                    Ok(HostMessage::Monitors(list)) => {
+                        let _ = events_tx.send(SessionEvent::Monitors(list));
+                    }
                     Ok(HostMessage::Bye) => return SessionEnd::HostClosed,
                     Err(e) => {
                         tracing::warn!("réception interrompue : {e:#}");
@@ -181,6 +188,22 @@ pub async fn controller_session(
                     if enc.send(&ControllerMessage::Clipboard(text)).await.is_err() {
                         return SessionEnd::Dropped;
                     }
+                }
+            }
+            idx = monitor_rx.recv(), if monitor_open => {
+                match idx {
+                    // Demande de bascule de moniteur émise par l'UI (J12).
+                    Some(index) => {
+                        if enc
+                            .send(&ControllerMessage::SelectMonitor { index })
+                            .await
+                            .is_err()
+                        {
+                            return SessionEnd::Dropped;
+                        }
+                    }
+                    // Canal fermé : on n'écoute plus cette branche (pas de boucle folle).
+                    None => monitor_open = false,
                 }
             }
             ev = input_rx.recv() => {
@@ -212,12 +235,21 @@ pub async fn run_controller(
     config: ControllerConfig,
     events_tx: UnboundedSender<SessionEvent>,
     mut input_rx: UnboundedReceiver<InputEvent>,
+    mut monitor_rx: UnboundedReceiver<u32>,
     share_clipboard: bool,
     policy: ReconnectPolicy,
 ) -> Result<()> {
     let mut enc = first;
     loop {
-        match controller_session(enc, &events_tx, &mut input_rx, share_clipboard).await {
+        match controller_session(
+            enc,
+            &events_tx,
+            &mut input_rx,
+            &mut monitor_rx,
+            share_clipboard,
+        )
+        .await
+        {
             SessionEnd::UserQuit | SessionEnd::HostClosed => break,
             SessionEnd::Dropped => {
                 if !policy.enabled {

@@ -1,6 +1,6 @@
 # ViewerKiller — recette runtime (à jouer sur 2 PC)
 
-> Cible : **v0.1.13** (protocole **v4**). Toute la chaîne est vérifiée en CI
+> Cible : **v0.1.14** (protocole **v5**). Toute la chaîne est vérifiée en CI
 > (compilation + tests Linux/Windows), mais la capture d'écran, l'injection
 > clavier/souris et le presse-papiers ne se valident qu'**en vrai, sur Windows**.
 > Rejouer cette liste à chaque release. Coche au fur et à mesure ; note le
@@ -163,6 +163,21 @@ Synchro toutes les ~0,5 s dans les deux sens.
       (ex. 30 img/s, qualité 90) → plus net/fluide, plus de débit. Les réglages
       s'appliquent au **démarrage** de l'hébergement (pas en cours de session).
 
+## 13. Multi-écrans (J12) — ⭐ *nouveau, à valider*
+
+Nécessite un **hôte à au moins 2 moniteurs** (la capture Windows multi-moniteur
+n'a pas été testée au runtime).
+
+- [ ] **13.1** Avec un hôte multi-écrans, la barre de session affiche un
+      sélecteur **« Écran : 1 (principal) 2 … »**. Avec un seul écran, aucun
+      sélecteur (normal).
+- [ ] **13.2** Clique **Écran 2** → l'affichage bascule sur le second moniteur,
+      aux **bonnes dimensions** et **bonnes couleurs** (piège coordonnées du
+      bureau virtuel / offsets négatifs pour un écran à gauche du principal).
+- [ ] **13.3** Reviens sur **Écran 1** → retour correct.
+- [ ] **13.4** Souris/clavier restent cohérents avec le moniteur affiché après
+      bascule (les coordonnées visent le bon écran).
+
 ---
 
 ## Si un test échoue
@@ -170,4 +185,4 @@ Synchro toutes les ~0,5 s dans les deux sens.
 1. Note le **numéro** et ce que tu as vu (message exact, capture éventuelle).
 2. Si c'est côté hôte, relance l'hôte en **CLI** (`viewerkiller host`, au besoin
    `set RUST_LOG=debug`) pour capturer le journal d'audit et colle-le-moi.
-3. Précise si les **deux** PC sont bien en v0.1.13.
+3. Précise si les **deux** PC sont bien en v0.1.14.

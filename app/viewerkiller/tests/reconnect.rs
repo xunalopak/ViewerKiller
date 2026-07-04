@@ -89,6 +89,7 @@ async fn controller_reconnects_after_drop() {
 
     let (events_tx, mut events_rx) = mpsc::unbounded_channel();
     let (input_tx, input_rx) = mpsc::unbounded_channel();
+    let (_monitor_tx, monitor_rx) = mpsc::unbounded_channel();
     // Backoff court pour un test rapide ; reconnexion activée.
     let policy = ReconnectPolicy {
         enabled: true,
@@ -97,7 +98,7 @@ async fn controller_reconnects_after_drop() {
         max_backoff: Duration::from_millis(120),
     };
     let session = tokio::spawn(run_controller(
-        enc, addr, cfg, events_tx, input_rx, false, policy,
+        enc, addr, cfg, events_tx, input_rx, monitor_rx, false, policy,
     ));
 
     // Séquence attendue : ScreenInfo(100) → Reconnecting → ScreenInfo(200).

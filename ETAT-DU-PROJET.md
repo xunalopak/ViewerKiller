@@ -67,6 +67,13 @@ app/viewerkiller/    lib : host.rs, controller.rs, security.rs
 > et signale une version plus récente (bandeau GUI / ligne CLI) — informatif, sans
 > téléchargement. `release.yml` publie un `SHA256SUMS.txt` (prépare J16b).
 
+> Note multi-écrans (v0.1.14, J12) : l'hôte annonce ses moniteurs
+> (`HostMessage::Monitors`, `EnumDisplayMonitors` sous Windows) ; le contrôleur en
+> choisit un (`ControllerMessage::SelectMonitor`, sélecteur dans la barre GUI) et
+> l'hôte bascule la capture à chaud. Trait `ScreenCapturer::monitors`/
+> `select_monitor` (défaut mono-écran, stub Linux). **Capture Windows
+> multi-moniteur à valider au runtime.** Le curseur distant reste à faire (J12).
+
 ## Format réseau (rappel)
 1. Connexion TCP directe du contrôleur vers `ip:port` de l'hôte, puis
    vérification du code (en clair) : `DiscoveryMessage::Probe{code}` →
@@ -74,13 +81,14 @@ app/viewerkiller/    lib : host.rs, controller.rs, security.rs
 2. Handshake Noise `NNpsk0` (PSK = `blake3::derive_key(password)`), enregistrements
    `[u16 len][texte chiffré]`.
 3. Session : messages applicatifs cadrés u32, fragmentés en enregistrements Noise
-   ≤ 65519 o. Hôte→ctrl = `HostMessage` (ScreenInfo, Frame, Clipboard, Ping),
-   ctrl→hôte = `ControllerMessage` (Input, RequestFullFrame, Clipboard, Ping,
-   Bye). Ping toutes les 5 s ; session fermée si le pair est muet > 15 s.
+   ≤ 65519 o. Hôte→ctrl = `HostMessage` (ScreenInfo, Frame, Clipboard, Ping,
+   Monitors), ctrl→hôte = `ControllerMessage` (Input, RequestFullFrame, Clipboard,
+   Ping, SelectMonitor, Bye). Ping toutes les 5 s ; session fermée si le pair est
+   muet > 15 s. `Monitors` annonce les écrans, `SelectMonitor` en bascule (J12).
 
 ## Build & test
 ```bash
-cargo test --workspace      # 40 tests, tous verts sur Linux
+cargo test --workspace      # 42 tests, tous verts sur Linux
 cargo build --workspace
 # Vérif du code Windows (#[cfg(windows)]) sans machine Windows, type-check seul :
 rustup target add x86_64-pc-windows-gnu
@@ -105,12 +113,12 @@ et la perf :
    écran fluide ; tuiles natives « dirty rects ».
 
 ## Pièges connus / notes
-- **PROTO_VERSION = 4** : v0.1.5 = `InputEvent::Char` (texte Unicode, J8) ;
-  v0.1.7 = messages `Clipboard` hôte/contrôleur (presse-papiers, J11) ;
-  v0.1.9 = messages `Ping` keepalive (J13). Les deux machines doivent exécuter
-  la même version. Les nouveaux variants d'enum s'ajoutent **en fin** (postcard
-  encode le discriminant par ordre de déclaration) ; l'hôte refuse et journalise
-  une version incompatible.
+- **PROTO_VERSION = 5** : v0.1.5 = `InputEvent::Char` (texte Unicode, J8) ;
+  v0.1.7 = messages `Clipboard` (presse-papiers, J11) ; v0.1.9 = messages `Ping`
+  keepalive (J13) ; v0.1.14 = `Monitors` / `SelectMonitor` (multi-écrans, J12).
+  Les deux machines doivent exécuter la même version. Les nouveaux variants d'enum
+  s'ajoutent **en fin** (postcard encode le discriminant par ordre de déclaration) ;
+  l'hôte refuse et journalise une version incompatible.
 - `TileCodec` a été renommé `ZstdRgba` → `DeflateBgra` (deflate pur Rust, pas de
   dépendance C). JPEG = chemin par défaut de `TileEncoder`.
 - `snow::Builder::psk()` renvoie `Builder` (pas de `?`).

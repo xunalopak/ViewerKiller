@@ -131,12 +131,14 @@ async fn full_pipeline_screen_and_input() {
 
     let (events_tx, mut events_rx) = mpsc::unbounded_channel();
     let (input_tx, input_rx) = mpsc::unbounded_channel();
+    let (_monitor_tx, monitor_rx) = mpsc::unbounded_channel();
     let session = tokio::spawn(run_controller(
         enc,
         addr,
         cfg,
         events_tx,
         input_rx,
+        monitor_rx,
         false,
         ReconnectPolicy::disabled(),
     ));
@@ -157,6 +159,7 @@ async fn full_pipeline_screen_and_input() {
                 frames += 1;
             }
             SessionEvent::ScreenInfo { .. } => {}
+            SessionEvent::Monitors(_) => {}
             SessionEvent::Reconnecting => {}
             SessionEvent::Disconnected => panic!("déconnexion prématurée"),
         }

@@ -162,6 +162,27 @@ mod tests {
     }
 
     #[test]
+    fn multiscreen_messages_round_trip() {
+        let host = HostMessage::Monitors(vec![
+            MonitorInfo {
+                index: 0,
+                width: 1920,
+                height: 1080,
+                primary: true,
+            },
+            MonitorInfo {
+                index: 1,
+                width: 2560,
+                height: 1440,
+                primary: false,
+            },
+        ]);
+        assert_eq!(round_trip(&host), host);
+        let ctrl = ControllerMessage::SelectMonitor { index: 1 };
+        assert_eq!(round_trip(&ctrl), ctrl);
+    }
+
+    #[test]
     fn oversize_length_prefix_rejected() {
         let mut reader = FrameReader::new();
         let bogus = ((MAX_FRAME_LEN + 1) as u32).to_be_bytes();

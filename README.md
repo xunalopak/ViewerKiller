@@ -35,7 +35,7 @@ app/viewerkiller/    orchestration hôte/contrôleur, durcissement, CLI + GUI eg
 
 ```bash
 cargo build --release --workspace
-cargo test --workspace            # 40 tests
+cargo test --workspace            # 42 tests
 ```
 
 Sur Linux, le code spécifique Windows se vérifie en cross-compilation :

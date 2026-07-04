@@ -139,12 +139,14 @@ async fn run_connect(code: String, password: String, addr: SocketAddr) -> Result
 
     let (events_tx, mut events_rx) = mpsc::unbounded_channel();
     let (_input_tx, input_rx) = mpsc::unbounded_channel();
+    let (_monitor_tx, monitor_rx) = mpsc::unbounded_channel();
     let session = tokio::spawn(run_controller(
         enc,
         addr,
         config,
         events_tx,
         input_rx,
+        monitor_rx,
         true,
         ReconnectPolicy::default(),
     ));
@@ -165,6 +167,9 @@ async fn run_connect(code: String, password: String, addr: SocketAddr) -> Result
                 if frames % 15 == 0 {
                     tracing::info!(frames, "trames reçues");
                 }
+            }
+            SessionEvent::Monitors(m) => {
+                tracing::info!(count = m.len(), "moniteurs disponibles côté hôte");
             }
             SessionEvent::Reconnecting => {
                 tracing::warn!("connexion perdue — reconnexion en cours…");

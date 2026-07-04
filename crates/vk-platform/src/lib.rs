@@ -5,7 +5,7 @@
 //! permettent au reste du projet (protocole, réseau, crypto, UI) de compiler et
 //! d'être testé pendant le développement.
 
-use vk_core::protocol::MouseButton;
+use vk_core::protocol::{MonitorInfo, MouseButton};
 
 /// Une trame d'écran capturée, au format **BGRA** (4 octets/pixel, ordre des
 /// canaux fourni par DXGI sous Windows).
@@ -25,10 +25,32 @@ impl Frame {
 
 /// Source de trames écran.
 pub trait ScreenCapturer: Send {
-    /// Dimensions courantes de l'écran capturé.
+    /// Dimensions courantes de l'écran capturé (moniteur sélectionné).
     fn dimensions(&self) -> (u32, u32);
     /// Capture la prochaine trame ; `Ok(None)` si aucune n'est disponible.
     fn capture(&mut self) -> anyhow::Result<Option<Frame>>;
+
+    /// Liste des moniteurs disponibles (J12). Défaut : un seul moniteur,
+    /// correspondant à [`dimensions`](Self::dimensions).
+    fn monitors(&self) -> Vec<MonitorInfo> {
+        let (width, height) = self.dimensions();
+        vec![MonitorInfo {
+            index: 0,
+            width,
+            height,
+            primary: true,
+        }]
+    }
+
+    /// Bascule la capture vers le moniteur `index` (J12). Défaut : seul l'index 0
+    /// est valide (mono-écran).
+    fn select_monitor(&mut self, index: u32) -> anyhow::Result<()> {
+        if index == 0 {
+            Ok(())
+        } else {
+            anyhow::bail!("moniteur {index} inexistant (mono-écran)")
+        }
+    }
 }
 
 /// Accès au presse-papiers texte du système (synchronisation façon RDP).

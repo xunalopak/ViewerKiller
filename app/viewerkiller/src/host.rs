@@ -179,6 +179,9 @@ async fn host_session(
 ) -> Result<()> {
     let (width, height) = capturer.dimensions();
     enc.send(&HostMessage::ScreenInfo { width, height }).await?;
+    // Liste des moniteurs disponibles pour le choix côté contrôleur (J12).
+    enc.send(&HostMessage::Monitors(capturer.monitors()))
+        .await?;
 
     let mut encoder = TileEncoder::new(config.tile_size, config.quality);
     let period = Duration::from_secs_f64(1.0 / config.fps.max(1) as f64);
@@ -266,6 +269,27 @@ async fn host_session(
                         }
                     }
                     ControllerMessage::Ping => {}
+                    ControllerMessage::SelectMonitor { index } => {
+                        match capturer.select_monitor(index) {
+                            Ok(()) => {
+                                // Nouvelle géométrie → le contrôleur redimensionne ;
+                                // TileEncoder repart en trame pleine (détection du
+                                // changement de dimensions).
+                                let (width, height) = capturer.dimensions();
+                                if enc
+                                    .send(&HostMessage::ScreenInfo { width, height })
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                                tracing::info!(target: "audit", index, "moniteur sélectionné");
+                            }
+                            Err(e) => {
+                                tracing::warn!(target: "audit", "sélection moniteur refusée : {e:#}")
+                            }
+                        }
+                    }
                     ControllerMessage::Bye => {
                         tracing::info!("contrôleur déconnecté");
                         break;

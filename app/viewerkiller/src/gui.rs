@@ -167,6 +167,10 @@ struct ConnectForm {
 struct SessionScreen {
     events_rx: UnboundedReceiver<SessionEvent>,
     input_tx: UnboundedSender<InputEvent>,
+    /// Envoi d'un index de moniteur à basculer (multi-écrans, J12).
+    monitor_tx: UnboundedSender<u32>,
+    /// Moniteurs annoncés par l'hôte (vide ou 1 seul = pas de sélecteur).
+    monitors: Vec<vk_core::protocol::MonitorInfo>,
     fb: Option<FrameBuffer>,
     texture: Option<egui::TextureHandle>,
     remote_size: Option<(u32, u32)>,
@@ -184,10 +188,13 @@ impl SessionScreen {
     fn new(
         events_rx: UnboundedReceiver<SessionEvent>,
         input_tx: UnboundedSender<InputEvent>,
+        monitor_tx: UnboundedSender<u32>,
     ) -> Self {
         Self {
             events_rx,
             input_tx,
+            monitor_tx,
+            monitors: Vec::new(),
             fb: None,
             texture: None,
             remote_size: None,
@@ -217,6 +224,7 @@ impl SessionScreen {
                         }
                     }
                 }
+                SessionEvent::Monitors(list) => self.monitors = list,
                 SessionEvent::Reconnecting => self.reconnecting = true,
                 SessionEvent::Disconnected => self.disconnected = true,
             }
@@ -477,6 +485,22 @@ impl eframe::App for App {
                                 send_modifier_transitions(session, egui::Modifiers::default());
                                 next = Some(Screen::Home);
                             }
+                            // Sélecteur de moniteur (seulement si l'hôte en a plusieurs).
+                            if session.monitors.len() > 1 {
+                                ui.separator();
+                                ui.label("Écran :");
+                                let monitors = session.monitors.clone();
+                                for m in &monitors {
+                                    let label = if m.primary {
+                                        format!("{} (principal)", m.index + 1)
+                                    } else {
+                                        format!("{}", m.index + 1)
+                                    };
+                                    if ui.button(label).clicked() {
+                                        let _ = session.monitor_tx.send(m.index);
+                                    }
+                                }
+                            }
                         });
                     });
                     egui::CentralPanel::default().show(ctx, |ui| {
@@ -507,7 +531,8 @@ impl eframe::App for App {
                     ConnectResult::Ready {
                         events_rx,
                         input_tx,
-                    } => Screen::Session(SessionScreen::new(events_rx, input_tx)),
+                        monitor_tx,
+                    } => Screen::Session(SessionScreen::new(events_rx, input_tx, monitor_tx)),
                     ConnectResult::Failed(e) => Screen::Error(e),
                 });
             }
@@ -789,6 +814,7 @@ enum ConnectResult {
     Ready {
         events_rx: UnboundedReceiver<SessionEvent>,
         input_tx: UnboundedSender<InputEvent>,
+        monitor_tx: UnboundedSender<u32>,
     },
     Failed(String),
 }
@@ -821,18 +847,21 @@ fn start_connect(rt: &tokio::runtime::Runtime, form: &ConnectForm) -> Result<Scr
             Ok(enc) => {
                 let (events_tx, events_rx) = mpsc::unbounded_channel();
                 let (input_tx, input_rx) = mpsc::unbounded_channel();
+                let (monitor_tx, monitor_rx) = mpsc::unbounded_channel();
                 tokio::spawn(run_controller(
                     enc,
                     addr,
                     config,
                     events_tx,
                     input_rx,
+                    monitor_rx,
                     true,
                     ReconnectPolicy::default(),
                 ));
                 let _ = tx.send(ConnectResult::Ready {
                     events_rx,
                     input_tx,
+                    monitor_tx,
                 });
             }
             Err(e) => {
