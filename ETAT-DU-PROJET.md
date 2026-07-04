@@ -4,8 +4,8 @@
 > connectent **directement** par IP + port, sans serveur de rendez-vous.
 > Chiffrement bout-en-bout (Noise), code de connexion + mot de passe.
 
-Dernière mise à jour : **2026-07-04** (v0.1.9, J13 reconnexion). Plan détaillé :
-`~/.claude/plans/j-aimerai-construire-une-alternative-peaceful-castle.md`.
+Dernière mise à jour : **2026-07-04** (v0.1.10, J16a notification de MàJ). Plan
+détaillé : `~/.claude/plans/j-aimerai-construire-une-alternative-peaceful-castle.md`.
 
 ## Décisions verrouillées
 - Cible **Windows** (hôte + contrôleur). Cœur en **Rust**.
@@ -62,6 +62,11 @@ app/viewerkiller/    lib : host.rs, controller.rs, security.rs
 > automatique côté contrôleur (`run_controller` + `ReconnectPolicy`, backoff
 > exponentiel). Voir [`FEUILLE-DE-ROUTE.md`](FEUILLE-DE-ROUTE.md) J13.
 
+> Note mise à jour (v0.1.10, J16a) : `update.rs` interroge l'API GitHub Releases
+> au lancement (`ureq` + `native-tls`, hors fil principal, silencieux hors ligne)
+> et signale une version plus récente (bandeau GUI / ligne CLI) — informatif, sans
+> téléchargement. `release.yml` publie un `SHA256SUMS.txt` (prépare J16b).
+
 ## Format réseau (rappel)
 1. Connexion TCP directe du contrôleur vers `ip:port` de l'hôte, puis
    vérification du code (en clair) : `DiscoveryMessage::Probe{code}` →
@@ -75,7 +80,7 @@ app/viewerkiller/    lib : host.rs, controller.rs, security.rs
 
 ## Build & test
 ```bash
-cargo test --workspace      # 30 tests, tous verts sur Linux
+cargo test --workspace      # 33 tests, tous verts sur Linux
 cargo build --workspace
 # Vérif du code Windows (#[cfg(windows)]) sans machine Windows, type-check seul :
 rustup target add x86_64-pc-windows-gnu

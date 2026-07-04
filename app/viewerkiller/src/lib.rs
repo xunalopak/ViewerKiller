@@ -9,6 +9,7 @@ pub mod clipboard;
 pub mod controller;
 pub mod host;
 pub mod security;
+pub mod update;
 
 pub use controller::{
     controller_session, run_controller, ControllerConfig, ReconnectPolicy, SessionEnd, SessionEvent,

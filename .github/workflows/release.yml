@@ -32,6 +32,22 @@ jobs:
           Copy-Item README.md dist\ -ErrorAction SilentlyContinue
           Compress-Archive -Path dist\* -DestinationPath viewerkiller-windows-x64.zip -Force
 
+      - name: Générer SHA256SUMS
+        shell: pwsh
+        run: |
+          $files = @(
+            'viewerkiller-windows-x64.zip',
+            'target/release/viewerkiller.exe',
+            'target/release/viewerkiller-gui.exe'
+          )
+          $lines = foreach ($f in $files) {
+            $h = (Get-FileHash -Algorithm SHA256 $f).Hash.ToLower()
+            # Format « <hash>  <nom> » compatible `sha256sum -c` (pour J16b).
+            "$h  $(Split-Path -Leaf $f)"
+          }
+          $lines | Set-Content -Encoding ascii SHA256SUMS.txt
+          Get-Content SHA256SUMS.txt
+
       - name: Publier la release
         uses: softprops/action-gh-release@v2
         with:
@@ -41,3 +57,4 @@ jobs:
             viewerkiller-windows-x64.zip
             target/release/viewerkiller.exe
             target/release/viewerkiller-gui.exe
+            SHA256SUMS.txt

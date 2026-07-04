@@ -127,11 +127,17 @@ l'utilisateur garde la main. Mini-updater maison avec `ureq` (HTTP léger)
 plutôt que `self_update` (tire reqwest/tokio/TLS), pour des dépendances
 maîtrisées et un chemin auditable.
 
-### J16a — Notification de version (zéro risque)
+### J16a — Notification de version (zéro risque) — **fait (v0.1.10)**
 
-- [ ] `release.yml` publie un `SHA256SUMS` des binaires.
-- [ ] Au lancement, requête `releases/latest` → bandeau « v0.x.y disponible »
-      en GUI, ligne en CLI. Purement informatif, aucun téléchargement.
+- [x] `release.yml` publie un `SHA256SUMS.txt` des trois assets (format
+      `sha256sum -c`, prépare la vérification d'intégrité de J16b).
+- [x] Au lancement, requête `releases/latest` (module `update.rs`, `ureq` +
+      `native-tls`) → bandeau « ⬆ nouvelle version disponible » en GUI, ligne
+      `ℹ` en CLI. Purement informatif, **aucun téléchargement**. Exécuté hors du
+      fil principal (thread dédié / `spawn_blocking`), délai 5 s, **silencieux
+      hors ligne** (VPN isolé) — ne bloque jamais le démarrage.
+- Choix TLS : `native-tls` (OpenSSL sur Linux, SChannel sur Windows) plutôt que
+  rustls/ring, pour garder le cross-check Windows depuis Linux (pas de C).
 
 ### J16b — Téléchargement + remplacement
 

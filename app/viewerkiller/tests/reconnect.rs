@@ -53,6 +53,10 @@ async fn controller_reconnects_after_drop() {
         })
         .await
         .unwrap();
+        // Laisse le contrôleur recevoir la géométrie avant de couper : sinon, sur
+        // certaines piles TCP (Windows), le RST de fermeture purge le tampon de
+        // réception et ce message serait perdu (course tolérée sous Linux).
+        tokio::time::sleep(Duration::from_millis(300)).await;
         drop(enc); // simule une coupure réseau (VPN qui tombe)
 
         // 2e connexion (reconnexion) : géométrie « 200×160 », puis on attend le

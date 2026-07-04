@@ -56,14 +56,28 @@ struct App {
     /// Tâche `serve` de l'hôte en cours, pour pouvoir l'arrêter au retour à
     /// l'accueil (sinon l'ancien listener — et son ancien code — survivrait).
     host_task: Option<tokio::task::JoinHandle<()>>,
+    /// Résultat (unique) de la vérification de mise à jour en arrière-plan (J16a).
+    update_rx: std_mpsc::Receiver<viewerkiller::update::UpdateInfo>,
+    /// Nouvelle version disponible, une fois la vérification aboutie.
+    update_info: Option<viewerkiller::update::UpdateInfo>,
 }
 
 impl App {
     fn new() -> Self {
+        // Vérification de version sur un thread dédié (ureq est bloquant) ;
+        // silencieuse hors ligne, ne retarde pas l'ouverture de la fenêtre.
+        let (update_tx, update_rx) = std_mpsc::channel();
+        std::thread::spawn(move || {
+            if let Some(info) = viewerkiller::update::check_latest() {
+                let _ = update_tx.send(info);
+            }
+        });
         Self {
             rt: tokio::runtime::Runtime::new().expect("runtime tokio"),
             screen: Screen::Home,
             host_task: None,
+            update_rx,
+            update_info: None,
         }
     }
 }
@@ -228,6 +242,13 @@ impl eframe::App for App {
         let mut next: Option<Screen> = None;
         let mut new_host_task: Option<tokio::task::JoinHandle<()>> = None;
 
+        // Récupère (une fois) le résultat de la vérification de mise à jour.
+        if self.update_info.is_none() {
+            if let Ok(info) = self.update_rx.try_recv() {
+                self.update_info = Some(info);
+            }
+        }
+
         match &mut self.screen {
             Screen::Home => {
                 egui::CentralPanel::default().show(ctx, |ui| {
@@ -244,6 +265,18 @@ impl eframe::App for App {
                         ui.add_space(10.0);
                         if ui.button("🔗  Se connecter (contrôler)").clicked() {
                             next = Some(Screen::Connect(ConnectForm::default()));
+                        }
+                        if let Some(info) = &self.update_info {
+                            ui.add_space(30.0);
+                            ui.colored_label(
+                                egui::Color32::from_rgb(0x40, 0xA0, 0xE0),
+                                format!(
+                                    "⬆ Nouvelle version disponible : v{} (actuelle v{})",
+                                    info.latest,
+                                    viewerkiller::update::CURRENT_VERSION
+                                ),
+                            );
+                            ui.hyperlink_to("Voir la release", &info.url);
                         }
                     });
                 });

@@ -31,9 +31,28 @@ fn init_tracing() {
         .init();
 }
 
+/// Vérifie en arrière-plan si une nouvelle version est disponible (J16a) et
+/// l'affiche le cas échéant. Silencieux hors ligne ; ne bloque jamais le
+/// démarrage ni la session.
+fn spawn_update_check() {
+    tokio::spawn(async {
+        if let Ok(Some(info)) =
+            tokio::task::spawn_blocking(viewerkiller::update::check_latest).await
+        {
+            println!(
+                "ℹ Nouvelle version disponible : v{} (actuelle v{}) — {}",
+                info.latest,
+                viewerkiller::update::CURRENT_VERSION,
+                info.url
+            );
+        }
+    });
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     init_tracing();
+    spawn_update_check();
     let args: Vec<String> = std::env::args().collect();
 
     match args.get(1).map(String::as_str) {
