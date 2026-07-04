@@ -182,3 +182,9 @@ maîtrisées et un chemin auditable.
 - [x] fps/qualité réglables dans la GUI (v0.1.12) : section « ⚙ Réglages
       d'hébergement » sur l'accueil (sliders 5–30 img/s, qualité 40–95),
       appliqués au démarrage de l'hébergement.
+- [x] Copier/couper/coller (v0.1.13) : egui-winit pousse `Event::Copy`/`Cut`/
+      `Paste` **à la place** de `Event::Key{C/X/V}` (retour anticipé) et supprime
+      le `Text` ; ces événements étaient ignorés → **Ctrl+C/X/V ne passaient
+      jamais** à l'hôte. Désormais rejoués explicitement (la lettre, Ctrl déjà
+      tenu ; le collage s'appuie sur le presse-papiers hôte synchronisé).
+      Traduction clavier extraite dans `translate_key_event` + 6 tests unitaires.

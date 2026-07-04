@@ -599,34 +599,13 @@ fn draw_session(ui: &mut egui::Ui, session: &mut SessionScreen) {
         });
     }
 
-    // Clavier : le texte passe par `Event::Text` (majuscules, accents, AltGr,
-    // disposition résolue côté contrôleur → injection Unicode côté hôte) ; les
-    // `Event::Key` ne sont envoyés en VK que pour les touches non imprimables
-    // et les raccourcis Ctrl/Alt, sinon Espace et lettres seraient doublés.
-    for event in key_events {
-        match event {
-            egui::Event::Text(text) => {
-                for c in text.chars() {
-                    let _ = session.input_tx.send(InputEvent::Char { c });
-                }
-            }
-            egui::Event::Key {
-                key,
-                pressed,
-                modifiers,
-                ..
-            } => {
-                // AltGr = Ctrl+Alt : le caractère composé arrive via `Text`.
-                let altgr = modifiers.ctrl && modifiers.alt;
-                let shortcut = (modifiers.ctrl || modifiers.alt) && !altgr;
-                if !key_produces_text(key) || shortcut {
-                    if let Some(vk) = egui_key_to_vk(key) {
-                        let _ = session.input_tx.send(InputEvent::Key { key: vk, pressed });
-                    }
-                }
-            }
-            _ => {}
-        }
+    // Clavier : traduction déportée dans une fonction pure (testable).
+    let mut to_send = Vec::new();
+    for event in &key_events {
+        translate_key_event(event, &mut to_send);
+    }
+    for ev in to_send {
+        let _ = session.input_tx.send(ev);
     }
 }
 
@@ -634,6 +613,72 @@ fn draw_session(ui: &mut egui::Ui, session: &mut SessionScreen) {
 const VK_SHIFT: u32 = 0x10;
 const VK_CONTROL: u32 = 0x11;
 const VK_MENU: u32 = 0x12; // Alt
+
+// Codes de touches virtuelles Windows pour copier / couper / coller.
+const VK_C: u32 = 0x43;
+const VK_X: u32 = 0x58;
+const VK_V: u32 = 0x56;
+
+/// Traduit un événement clavier egui en `InputEvent`s pour l'hôte (hors
+/// transitions de modificateurs, gérées à part par [`send_modifier_transitions`]).
+///
+/// Trois sources :
+/// - `Event::Text` : caractères déjà résolus (majuscules, accents, AltGr) →
+///   injectés en Unicode côté hôte.
+/// - `Event::Copy`/`Cut`/`Paste` : **egui intercepte** Ctrl+C/X/V (et Ctrl+Inser,
+///   Maj+Suppr/Inser) et pousse ces événements sémantiques **à la place** de
+///   `Event::Key{C/X/V}` (retour anticipé dans egui-winit), en supprimant aussi le
+///   `Text`. Sans traitement explicite, copier/couper/coller n'est **jamais**
+///   transmis. On rejoue la lettre correspondante ; le contrôleur tient déjà Ctrl
+///   enfoncé (transitions de modificateurs), donc l'hôte exécute bien Ctrl+C/X/V.
+///   Le collage s'appuie sur le presse-papiers de l'hôte, maintenu synchro avec
+///   celui du contrôleur (J11).
+/// - `Event::Key` : touches non imprimables (Entrée, flèches, F1-F12…) et
+///   raccourcis Ctrl/Alt ; les lettres/espaces nus passent par `Text` (pas de
+///   doublon).
+fn translate_key_event(event: &egui::Event, out: &mut Vec<InputEvent>) {
+    match event {
+        egui::Event::Text(text) => {
+            for c in text.chars() {
+                out.push(InputEvent::Char { c });
+            }
+        }
+        egui::Event::Copy => push_key_tap(out, VK_C),
+        egui::Event::Cut => push_key_tap(out, VK_X),
+        egui::Event::Paste(_) => push_key_tap(out, VK_V),
+        egui::Event::Key {
+            key,
+            pressed,
+            modifiers,
+            ..
+        } => {
+            // AltGr = Ctrl+Alt : le caractère composé arrive via `Text`.
+            let altgr = modifiers.ctrl && modifiers.alt;
+            let shortcut = (modifiers.ctrl || modifiers.alt) && !altgr;
+            if !key_produces_text(*key) || shortcut {
+                if let Some(vk) = egui_key_to_vk(*key) {
+                    out.push(InputEvent::Key {
+                        key: vk,
+                        pressed: *pressed,
+                    });
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Empile un appui + relâchement d'une touche virtuelle (raccourci ponctuel).
+fn push_key_tap(out: &mut Vec<InputEvent>, vk: u32) {
+    out.push(InputEvent::Key {
+        key: vk,
+        pressed: true,
+    });
+    out.push(InputEvent::Key {
+        key: vk,
+        pressed: false,
+    });
+}
 
 /// Envoie les changements d'état des modificateurs depuis la dernière frame.
 fn send_modifier_transitions(session: &mut SessionScreen, mods: egui::Modifiers) {
@@ -888,4 +933,126 @@ fn egui_key_to_vk(key: egui::Key) -> Option<u32> {
         _ => return None,
     };
     Some(vk)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Traduit une liste d'événements en `InputEvent`s (comme la boucle clavier).
+    fn translate(events: &[egui::Event]) -> Vec<InputEvent> {
+        let mut out = Vec::new();
+        for e in events {
+            translate_key_event(e, &mut out);
+        }
+        out
+    }
+
+    fn key_event(key: egui::Key, pressed: bool, modifiers: egui::Modifiers) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    /// Régression : egui pousse `Event::Copy` pour Ctrl+C (pas `Event::Key{C}`).
+    /// Sans traitement dédié, copier ne passait jamais côté hôte.
+    #[test]
+    fn ctrl_c_copy_injects_c_tap() {
+        assert_eq!(
+            translate(&[egui::Event::Copy]),
+            vec![
+                InputEvent::Key {
+                    key: VK_C,
+                    pressed: true
+                },
+                InputEvent::Key {
+                    key: VK_C,
+                    pressed: false
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn cut_and_paste_inject_x_and_v_taps() {
+        assert_eq!(
+            translate(&[egui::Event::Cut]),
+            vec![
+                InputEvent::Key {
+                    key: VK_X,
+                    pressed: true
+                },
+                InputEvent::Key {
+                    key: VK_X,
+                    pressed: false
+                },
+            ]
+        );
+        // Le contenu du Paste est ignoré : l'hôte colle son propre presse-papiers.
+        assert_eq!(
+            translate(&[egui::Event::Paste("peu importe".into())]),
+            vec![
+                InputEvent::Key {
+                    key: VK_V,
+                    pressed: true
+                },
+                InputEvent::Key {
+                    key: VK_V,
+                    pressed: false
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn plain_text_becomes_char() {
+        assert_eq!(
+            translate(&[egui::Event::Text("é".into())]),
+            vec![InputEvent::Char { c: 'é' }]
+        );
+    }
+
+    #[test]
+    fn ctrl_a_shortcut_sent_as_vk() {
+        // Ctrl+A n'a pas d'événement sémantique → Event::Key avec ctrl.
+        let ev = key_event(
+            egui::Key::A,
+            true,
+            egui::Modifiers {
+                ctrl: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            translate(&[ev]),
+            vec![InputEvent::Key {
+                key: 0x41,
+                pressed: true
+            }]
+        );
+    }
+
+    #[test]
+    fn plain_letter_key_not_duplicated() {
+        // Une lettre sans modificateur passe par Text : le Key correspondant ne
+        // doit rien émettre (sinon la lettre sortirait deux fois).
+        let ev = key_event(egui::Key::A, true, egui::Modifiers::default());
+        assert!(translate(&[ev]).is_empty());
+    }
+
+    #[test]
+    fn special_key_sent_without_modifier() {
+        let ev = key_event(egui::Key::Enter, true, egui::Modifiers::default());
+        assert_eq!(
+            translate(&[ev]),
+            vec![InputEvent::Key {
+                key: 0x0D,
+                pressed: true
+            }]
+        );
+    }
 }

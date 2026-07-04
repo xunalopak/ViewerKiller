@@ -1,6 +1,6 @@
 # ViewerKiller — recette runtime (à jouer sur 2 PC)
 
-> Cible : **v0.1.12** (protocole **v4**). Toute la chaîne est vérifiée en CI
+> Cible : **v0.1.13** (protocole **v4**). Toute la chaîne est vérifiée en CI
 > (compilation + tests Linux/Windows), mais la capture d'écran, l'injection
 > clavier/souris et le presse-papiers ne se valident qu'**en vrai, sur Windows**.
 > Rejouer cette liste à chaque release. Coche au fur et à mesure ; note le
@@ -80,7 +80,11 @@ Ouvre le Bloc-notes sur PC-A et tape **depuis PC-B** :
 - [ ] **6.2** **Accents / caractères FR** : `é è à ç ù €` (clavier FR : AltGr+e
       pour €).
 - [ ] **6.3** Chiffres et symboles : `1234 !@#/?:;.,`.
-- [ ] **6.4** **Ctrl+A** (tout sélectionner), **Ctrl+C**, **Ctrl+V**.
+- [ ] **6.4** ⭐ **Ctrl+A** (tout sélectionner), **Ctrl+C** (copier), **Ctrl+X**
+      (couper), **Ctrl+V** (coller) — *copier/couper/coller corrigé en v0.1.13
+      (egui les livrait en `Copy`/`Cut`/`Paste`, ignorés) : à tester en priorité.*
+      Vérifie un aller-retour : sélectionne + copie du texte distant, colle-le
+      ailleurs sur l'hôte.
 - [ ] **6.5** **Shift+flèches** (sélection de texte), flèches seules.
 - [ ] **6.6** **Entrée**, **Tab**, **Retour arrière**, **Suppr**, **Échap**.
 - [ ] **6.7** Une touche de fonction, ex. **F5** dans un navigateur (recharge).
@@ -166,4 +170,4 @@ Synchro toutes les ~0,5 s dans les deux sens.
 1. Note le **numéro** et ce que tu as vu (message exact, capture éventuelle).
 2. Si c'est côté hôte, relance l'hôte en **CLI** (`viewerkiller host`, au besoin
    `set RUST_LOG=debug`) pour capturer le journal d'audit et colle-le-moi.
-3. Précise si les **deux** PC sont bien en v0.1.12.
+3. Précise si les **deux** PC sont bien en v0.1.13.
