@@ -11,9 +11,9 @@ members = [
 [workspace.package]
 version = "0.1.15"
 edition = "2021"
-# Source-visible, sans modification, avec attribution — voir le fichier LICENSE.
-# Pas une licence libre / open source.
-license = "LicenseRef-SourceAvailable-NoDerivatives"
+# Source-visible, non commerciale, sans modification, avec attribution —
+# voir le fichier LICENSE. Pas une licence libre / open source.
+license = "LicenseRef-SourceAvailable-NonCommercial-NoDerivatives"
 # Empêche toute publication accidentelle sur crates.io (non open source).
 publish = false
 rust-version = "1.80"

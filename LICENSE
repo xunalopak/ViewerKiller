@@ -1,12 +1,14 @@
-ViewerKiller — Licence « source visible, sans modification, avec attribution »
+ViewerKiller — Licence « source visible, non commerciale, sans modification,
+avec attribution »
 Copyright (c) 2026 Romain Champliau. Tous droits réservés, sous réserve des
 autorisations expresses accordées ci-dessous.
 
 Résumé (non contractuel — les termes qui font foi sont ci-dessous) :
   ✅  Consulter et lire le code source.
-  ✅  Utiliser et redistribuer le Logiciel tel quel, À CONDITION de créditer
-      visiblement « Romain Champliau ».
-  ❌  Modifier le code ou créer des versions/œuvres dérivées.
+  ✅  Utiliser et redistribuer le Logiciel tel quel, à des fins NON COMMERCIALES,
+      À CONDITION de créditer visiblement « Romain Champliau ».
+  ❌  Tout usage COMMERCIAL sans autorisation écrite préalable de l'auteur.
+  ❌  Modifier le code ou créer des versions / œuvres dérivées.
   ❌  Retirer ou masquer l'attribution et les mentions de droit d'auteur.
 
 Le code source de ViewerKiller (le « Logiciel ») est rendu public à des fins de
@@ -17,9 +19,10 @@ source / libre : elle accorde uniquement les droits limités décrits ci-après.
    Toute personne est autorisée à consulter, lire et étudier le code source du
    Logiciel.
 
-2. UTILISATION ET REDISTRIBUTION AVEC ATTRIBUTION
+2. UTILISATION ET REDISTRIBUTION NON COMMERCIALES, AVEC ATTRIBUTION
    L'utilisation du Logiciel (son exécution) et la redistribution de copies
-   verbatim (non modifiées) sont autorisées, à la condition impérative de :
+   verbatim (non modifiées) sont autorisées uniquement à des fins NON
+   COMMERCIALES (voir la définition au point 4), à la condition impérative de :
      a. conserver intacts la présente licence ainsi que toutes les mentions de
         droit d'auteur et d'attribution ; et
      b. créditer de façon visible l'auteur « Romain Champliau » dans toute
@@ -32,15 +35,25 @@ source / libre : elle accorde uniquement les droits limités décrits ci-après.
    ou de créer des œuvres dérivées du Logiciel, ainsi que de distribuer des
    versions modifiées, sans l'autorisation écrite et préalable de l'auteur.
 
-4. RÉSERVE DES DROITS
+4. USAGE COMMERCIAL RÉSERVÉ
+   Tout usage commercial du Logiciel est interdit sans l'autorisation écrite et
+   préalable de l'auteur. Est réputé « commercial » tout usage principalement
+   destiné à ou orienté vers un avantage commercial ou une rémunération monétaire
+   (notamment : vente, revente, location, prestation payante, intégration dans un
+   produit ou service payant, ou usage au sein d'une activité lucrative). Tout
+   autre usage est réputé « non commercial » (usage personnel, évaluation, étude,
+   recherche). L'auteur demeure libre d'accorder, au cas par cas, des licences
+   commerciales distinctes.
+
+5. RÉSERVE DES DROITS
    Tout droit non expressément accordé par la présente licence est réservé.
    Aucune licence de brevet ni de marque n'est concédée.
 
-5. ABSENCE DE GARANTIE
+6. ABSENCE DE GARANTIE
    LE LOGICIEL EST FOURNI « EN L'ÉTAT », SANS GARANTIE D'AUCUNE SORTE, EXPRESSE
    OU IMPLICITE. EN AUCUN CAS L'AUTEUR NE POURRA ÊTRE TENU RESPONSABLE D'UN
    QUELCONQUE DOMMAGE OU RESPONSABILITÉ DÉCOULANT DU LOGICIEL OU DE SON
    UTILISATION.
 
-Pour toute utilisation en dehors de ce cadre (modification, œuvre dérivée,
-licence spécifique) : romainchampliau@gmail.com
+Pour tout usage commercial, toute modification ou toute licence spécifique :
+romainchampliau@gmail.com

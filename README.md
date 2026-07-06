@@ -80,12 +80,15 @@ runtime se fait sur Windows**. Détails : voir
 
 ## Licence
 
-**Source visible, sans modification, avec attribution — © 2026 Romain Champliau.**
+**Source visible, non commerciale, sans modification, avec attribution —
+© 2026 Romain Champliau.**
 
 Code **source-available** (pas open source / libre) :
 
-- ✅ tu peux **consulter** le code et l'**utiliser** tel quel, à condition de
-  **créditer visiblement « Romain Champliau »** ;
+- ✅ **consulter** le code et l'**utiliser** tel quel **à des fins non
+  commerciales**, à condition de **créditer visiblement « Romain Champliau »** ;
+- ❌ **usage commercial** sans accord écrit préalable ;
 - ❌ **modification** et **œuvres dérivées** interdites sans accord écrit.
 
-Voir le fichier [`LICENSE`](LICENSE). Contact : romainchampliau@gmail.com.
+Voir le fichier [`LICENSE`](LICENSE). Pour un usage commercial ou une modification :
+romainchampliau@gmail.com.
