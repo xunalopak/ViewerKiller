@@ -80,4 +80,8 @@ runtime se fait sur Windows**. Détails : voir
 
 ## Licence
 
-MIT OR Apache-2.0.
+**Logiciel propriétaire — Copyright © 2026 Romain Champliau. Tous droits réservés.**
+
+Voir le fichier [`LICENSE`](LICENSE). Aucune copie, modification, distribution ni
+utilisation (notamment commerciale) n'est autorisée sans accord écrit préalable de
+l'auteur. Contact : romainchampliau@gmail.com.
