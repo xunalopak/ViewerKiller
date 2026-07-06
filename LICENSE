@@ -1,38 +1,46 @@
-ViewerKiller — Licence propriétaire
-Copyright (c) 2026 Romain Champliau. Tous droits réservés.
+ViewerKiller — Licence « source visible, sans modification, avec attribution »
+Copyright (c) 2026 Romain Champliau. Tous droits réservés, sous réserve des
+autorisations expresses accordées ci-dessous.
 
-Le présent logiciel « ViewerKiller », son code source, sa documentation et
-l'ensemble des fichiers qui l'accompagnent (le « Logiciel ») sont la propriété
-exclusive de Romain Champliau (l'« Auteur ») et sont protégés par le droit
-d'auteur ainsi que par les traités internationaux applicables.
+Résumé (non contractuel — les termes qui font foi sont ci-dessous) :
+  ✅  Consulter et lire le code source.
+  ✅  Utiliser et redistribuer le Logiciel tel quel, À CONDITION de créditer
+      visiblement « Romain Champliau ».
+  ❌  Modifier le code ou créer des versions/œuvres dérivées.
+  ❌  Retirer ou masquer l'attribution et les mentions de droit d'auteur.
 
-TOUS DROITS RÉSERVÉS.
+Le code source de ViewerKiller (le « Logiciel ») est rendu public à des fins de
+transparence et de vérification. La présente licence n'est PAS une licence open
+source / libre : elle accorde uniquement les droits limités décrits ci-après.
 
-Sauf autorisation écrite, préalable et expresse de l'Auteur, il est notamment
-interdit, à toute personne, de :
+1. CONSULTATION
+   Toute personne est autorisée à consulter, lire et étudier le code source du
+   Logiciel.
 
-  1. copier, reproduire, publier, transmettre ou distribuer tout ou partie du
-     Logiciel ou de son code source, sous quelque forme et par quelque moyen
-     que ce soit ;
-  2. modifier, adapter, traduire ou créer des œuvres dérivées du Logiciel ;
-  3. concéder en sous-licence, louer, prêter, vendre, héberger comme service ou
-     mettre de toute autre manière le Logiciel à la disposition de tiers ;
-  4. utiliser le Logiciel à des fins commerciales ;
-  5. procéder à de l'ingénierie inverse, décompiler ou désassembler le Logiciel,
-     sauf dans la stricte mesure où une loi impérative applicable l'autorise
-     nonobstant la présente interdiction.
+2. UTILISATION ET REDISTRIBUTION AVEC ATTRIBUTION
+   L'utilisation du Logiciel (son exécution) et la redistribution de copies
+   verbatim (non modifiées) sont autorisées, à la condition impérative de :
+     a. conserver intacts la présente licence ainsi que toutes les mentions de
+        droit d'auteur et d'attribution ; et
+     b. créditer de façon visible l'auteur « Romain Champliau » dans toute
+        publication, documentation, interface, mention « À propos » ou support
+        accompagnant l'utilisation ou la distribution du Logiciel.
+   Toute utilisation ou redistribution sans cette attribution est interdite.
 
-Aucune licence et aucun droit ne sont accordés, de façon implicite, par
-préclusion ou autrement, en dehors de ce qui est expressément stipulé par écrit
-par l'Auteur.
+3. AUCUNE MODIFICATION NI ŒUVRE DÉRIVÉE
+   Il est interdit de modifier, adapter, traduire, décompiler pour réutilisation,
+   ou de créer des œuvres dérivées du Logiciel, ainsi que de distribuer des
+   versions modifiées, sans l'autorisation écrite et préalable de l'auteur.
 
-LE LOGICIEL EST FOURNI « EN L'ÉTAT », SANS GARANTIE D'AUCUNE SORTE, EXPRESSE OU
-IMPLICITE, Y COMPRIS, DE MANIÈRE NON LIMITATIVE, LES GARANTIES DE QUALITÉ
-MARCHANDE, D'ADÉQUATION À UN USAGE PARTICULIER ET D'ABSENCE DE CONTREFAÇON. EN
-AUCUN CAS L'AUTEUR NE POURRA ÊTRE TENU RESPONSABLE D'UNE QUELCONQUE RÉCLAMATION,
-D'UN DOMMAGE OU DE TOUTE AUTRE RESPONSABILITÉ, QUE CE SOIT DANS LE CADRE D'UNE
-ACTION CONTRACTUELLE, DÉLICTUELLE OU AUTRE, DÉCOULANT DU LOGICIEL, DE SON
-UTILISATION OU DE TOUTE AUTRE OPÉRATION LIÉE AU LOGICIEL.
+4. RÉSERVE DES DROITS
+   Tout droit non expressément accordé par la présente licence est réservé.
+   Aucune licence de brevet ni de marque n'est concédée.
 
-Pour toute demande d'autorisation ou de licence :
-romainchampliau@gmail.com
+5. ABSENCE DE GARANTIE
+   LE LOGICIEL EST FOURNI « EN L'ÉTAT », SANS GARANTIE D'AUCUNE SORTE, EXPRESSE
+   OU IMPLICITE. EN AUCUN CAS L'AUTEUR NE POURRA ÊTRE TENU RESPONSABLE D'UN
+   QUELCONQUE DOMMAGE OU RESPONSABILITÉ DÉCOULANT DU LOGICIEL OU DE SON
+   UTILISATION.
+
+Pour toute utilisation en dehors de ce cadre (modification, œuvre dérivée,
+licence spécifique) : romainchampliau@gmail.com
