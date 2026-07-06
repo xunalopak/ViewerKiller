@@ -197,3 +197,23 @@ maîtrisées et un chemin auditable.
       jamais** à l'hôte. Désormais rejoués explicitement (la lettre, Ctrl déjà
       tenu ; le collage s'appuie sur le presse-papiers hôte synchronisé).
       Traduction clavier extraite dans `translate_key_event` + 6 tests unitaires.
+- [x] **Flèches + F1-F12 (v0.1.15)** : injection avec **scan code**
+      (`MapVirtualKeyW`) + **`KEYEVENTF_EXTENDEDKEY`** pour les touches étendues
+      (flèches, Inser/Suppr, Début/Fin, Page préc./suiv.). Avant, `wScan = 0` sans
+      drapeau étendu faisait interpréter les flèches comme le pavé numérique (pas
+      de sélection Maj+flèche) et certaines apps ignoraient les F-keys.
+- [x] **Capture clavier exclusive (v0.1.15)** : en session, les événements
+      clavier sont retirés de la file egui **avant** de dessiner l'UI (`num_presses`
+      lit `events`). Sinon Tab déplaçait le focus vers « Déconnecter » et Entrée
+      l'activait → **Tab+Entrée fermait la session**.
+- [x] **Refus de consentement (v0.1.15)** : le contrôleur ne reconnecte plus quand
+      la session n'a **jamais été établie** (aucun `ScreenInfo`). Sous Windows, le
+      RST à la fermeture effaçait le `Bye` de refus → le contrôleur voyait une
+      coupure → reconnexion → **la pop-up de demande rebondissait**. Délai
+      d'attente pré-établissement allongé (45 s) pour couvrir le consentement.
+      Régression : `no_reconnect_when_session_never_established`.
+- [ ] **Touches système** (Alt+Tab, touche Windows, Ctrl+Alt+Suppr) : captées par
+      l'OS **local** du contrôleur avant egui → nécessitent un **hook clavier bas
+      niveau** (`WH_KEYBOARD_LL`, Windows) pour les intercepter et les relayer. À
+      faire (le reste du clavier — modificateurs, F-keys, flèches, raccourcis —
+      fonctionne).

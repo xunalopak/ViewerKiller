@@ -17,11 +17,11 @@ use windows::Win32::Graphics::Gdi::{
     SRCCOPY,
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYBD_EVENT_FLAGS,
-    KEYEVENTF_KEYUP, KEYEVENTF_UNICODE, MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_HWHEEL,
-    MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP,
-    MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL, MOUSEINPUT,
-    MOUSE_EVENT_FLAGS, VIRTUAL_KEY,
+    MapVirtualKeyW, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT,
+    KEYBD_EVENT_FLAGS, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, KEYEVENTF_UNICODE, MAPVK_VK_TO_VSC,
+    MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_HWHEEL, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
+    MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN,
+    MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL, MOUSEINPUT, MOUSE_EVENT_FLAGS, VIRTUAL_KEY,
 };
 use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
 
@@ -271,6 +271,17 @@ impl WindowsInjector {
     }
 }
 
+/// Touches « étendues » (préfixe scan-code `0xE0`) : flèches, navigation
+/// (Page préc./suiv., Début/Fin), Inser/Suppr. Sans le drapeau `EXTENDEDKEY`,
+/// elles sont interprétées comme leurs équivalents du pavé numérique (pas de
+/// déplacement ni de sélection).
+fn is_extended_key(vk: u16) -> bool {
+    matches!(
+        vk,
+        0x21 | 0x22 | 0x23 | 0x24 | 0x25 | 0x26 | 0x27 | 0x28 | 0x2D | 0x2E
+    )
+}
+
 fn send_mouse(flags: MOUSE_EVENT_FLAGS, dx: i32, dy: i32, data: i32) {
     let input = INPUT {
         r#type: INPUT_MOUSE,
@@ -325,17 +336,25 @@ impl InputInjector for WindowsInjector {
     }
 
     fn key(&mut self, key: u32, pressed: bool) -> anyhow::Result<()> {
-        let flags = if pressed {
-            KEYBD_EVENT_FLAGS(0)
-        } else {
-            KEYEVENTF_KEYUP
-        };
+        let vk = key as u16;
+        // On fournit **VK + scan code** (certaines applications lisent le scan
+        // code plutôt que le VK — ex. jeux, terminaux — d'où des F1-F12 sans
+        // effet avec `wScan = 0`) et le drapeau `EXTENDEDKEY` pour les flèches et
+        // touches de navigation (sinon interprétées comme le pavé numérique).
+        let scan = unsafe { MapVirtualKeyW(vk as u32, MAPVK_VK_TO_VSC) } as u16;
+        let mut flags = KEYBD_EVENT_FLAGS(0);
+        if is_extended_key(vk) {
+            flags |= KEYEVENTF_EXTENDEDKEY;
+        }
+        if !pressed {
+            flags |= KEYEVENTF_KEYUP;
+        }
         let input = INPUT {
             r#type: INPUT_KEYBOARD,
             Anonymous: INPUT_0 {
                 ki: KEYBDINPUT {
-                    wVk: VIRTUAL_KEY(key as u16),
-                    wScan: 0,
+                    wVk: VIRTUAL_KEY(vk),
+                    wScan: scan,
                     dwFlags: flags,
                     time: 0,
                     dwExtraInfo: 0,

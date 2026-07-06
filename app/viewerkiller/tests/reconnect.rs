@@ -7,6 +7,8 @@
 //! session (nouvelle géométrie reçue) — le tout sans réauthentification par
 //! l'utilisateur.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::net::{TcpListener, TcpStream};
@@ -129,4 +131,82 @@ async fn controller_reconnects_after_drop() {
     drop(input_tx);
     let _ = session.await;
     host.await.unwrap();
+}
+
+/// Régression : une connexion qui **n'a jamais été établie** (handshake OK mais
+/// aucun `ScreenInfo` — cas d'un refus de consentement, où le `Bye` peut être
+/// perdu par un RST sous Windows) ne doit **pas** déclencher de reconnexion,
+/// sinon la demande de connexion « rebondit » en boucle côté hôte.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn no_reconnect_when_session_never_established() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let psk = derive_psk("mot-de-passe-fort");
+    let code = "424242".to_string();
+
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let attempts_host = attempts.clone();
+    let host_code = code.clone();
+    let host = tokio::spawn(async move {
+        // Chaque connexion : handshake OK puis fermeture immédiate SANS ScreenInfo
+        // (le contrôleur reçoit un EOF, pas un Bye — comme un RST qui l'efface).
+        loop {
+            let (mut sock, _) = match listener.accept().await {
+                Ok(x) => x,
+                Err(_) => break,
+            };
+            attempts_host.fetch_add(1, Ordering::SeqCst);
+            accept_probe(&mut sock, &host_code).await;
+            let _enc = EncryptedStream::accept(sock, &psk).await.unwrap();
+            // `_enc` lâché ici : fermeture sans rien envoyer.
+        }
+    });
+
+    let cfg = ControllerConfig {
+        code,
+        password: "mot-de-passe-fort".into(),
+        port: addr.port(),
+    };
+    let enc = viewerkiller::controller::connect_to(addr, &cfg)
+        .await
+        .unwrap();
+
+    let (events_tx, mut events_rx) = mpsc::unbounded_channel();
+    let (input_tx, input_rx) = mpsc::unbounded_channel();
+    let (_monitor_tx, monitor_rx) = mpsc::unbounded_channel();
+    // Reconnexion activée + backoff court : si le bug était là, on verrait
+    // plusieurs tentatives et un événement Reconnecting.
+    let policy = ReconnectPolicy {
+        enabled: true,
+        max_attempts: 5,
+        initial_backoff: Duration::from_millis(20),
+        max_backoff: Duration::from_millis(40),
+    };
+    let session = tokio::spawn(run_controller(
+        enc, addr, cfg, events_tx, input_rx, monitor_rx, false, policy,
+    ));
+
+    // La session doit se terminer (Disconnected) SANS reconnexion.
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while let Some(ev) = events_rx.recv().await {
+            match ev {
+                SessionEvent::Reconnecting => {
+                    panic!("reconnexion déclenchée alors que la session n'a jamais été établie")
+                }
+                SessionEvent::Disconnected => break,
+                _ => {}
+            }
+        }
+    })
+    .await
+    .expect("timeout : la session ne s'est pas terminée");
+
+    drop(input_tx);
+    let _ = session.await;
+    assert_eq!(
+        attempts.load(Ordering::SeqCst),
+        1,
+        "une seule tentative de connexion attendue (pas de rebond)"
+    );
+    host.abort();
 }

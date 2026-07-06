@@ -21,6 +21,11 @@ use crate::clipboard::ClipboardSync;
 /// Période de sondage du presse-papiers local (synchronisation façon RDP).
 const CLIPBOARD_POLL: Duration = Duration::from_millis(500);
 
+/// Délai d'attente **avant** l'établissement de la session (réception du premier
+/// `ScreenInfo`). Doit dépasser le temps de consentement côté hôte (~30 s) : tant
+/// que l'utilisateur distant n'a pas accepté, aucun message n'arrive.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(45);
+
 /// Configuration d'un contrôleur.
 #[derive(Debug, Clone)]
 pub struct ControllerConfig {
@@ -84,6 +89,19 @@ pub enum SessionEnd {
     Dropped,
 }
 
+/// Traduit une perte de connexion en [`SessionEnd`] : on ne reconnecte **que** si
+/// la session avait réellement été établie (au moins un `ScreenInfo` reçu). Une
+/// coupure avant établissement = refus de consentement, version incompatible ou
+/// hôte injoignable → terminal, pas de reconnexion (sinon la demande de connexion
+/// « rebondit » en boucle côté hôte).
+fn drop_end(established: bool) -> SessionEnd {
+    if established {
+        SessionEnd::Dropped
+    } else {
+        SessionEnd::HostClosed
+    }
+}
+
 /// Politique de reconnexion automatique côté contrôleur (backoff exponentiel).
 #[derive(Debug, Clone)]
 pub struct ReconnectPolicy {
@@ -142,6 +160,9 @@ pub async fn controller_session(
     watchdog.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut last_rx = Instant::now();
     let mut monitor_open = true;
+    // Vrai dès le premier `ScreenInfo` reçu : conditionne la reconnexion et le
+    // délai d'attente (long avant établissement, pour couvrir le consentement).
+    let mut established = false;
 
     loop {
         tokio::select! {
@@ -149,6 +170,7 @@ pub async fn controller_session(
                 last_rx = Instant::now();
                 match msg {
                     Ok(HostMessage::ScreenInfo { width, height }) => {
+                        established = true;
                         let _ = events_tx.send(SessionEvent::ScreenInfo { width, height });
                     }
                     Ok(HostMessage::Frame(update)) => {
@@ -168,25 +190,26 @@ pub async fn controller_session(
                     Ok(HostMessage::Bye) => return SessionEnd::HostClosed,
                     Err(e) => {
                         tracing::warn!("réception interrompue : {e:#}");
-                        return SessionEnd::Dropped;
+                        return drop_end(established);
                     }
                 }
             }
             _ = keepalive.tick() => {
                 if enc.send(&ControllerMessage::Ping).await.is_err() {
-                    return SessionEnd::Dropped;
+                    return drop_end(established);
                 }
             }
             _ = watchdog.tick() => {
-                if last_rx.elapsed() > SESSION_TIMEOUT {
+                let timeout = if established { SESSION_TIMEOUT } else { CONNECT_TIMEOUT };
+                if last_rx.elapsed() > timeout {
                     tracing::warn!("session : hôte silencieux (délai dépassé)");
-                    return SessionEnd::Dropped;
+                    return drop_end(established);
                 }
             }
             _ = clip_ticker.tick(), if clipboard.is_some() => {
                 if let Some(text) = clipboard.as_mut().and_then(ClipboardSync::poll_local) {
                     if enc.send(&ControllerMessage::Clipboard(text)).await.is_err() {
-                        return SessionEnd::Dropped;
+                        return drop_end(established);
                     }
                 }
             }
@@ -199,7 +222,7 @@ pub async fn controller_session(
                             .await
                             .is_err()
                         {
-                            return SessionEnd::Dropped;
+                            return drop_end(established);
                         }
                     }
                     // Canal fermé : on n'écoute plus cette branche (pas de boucle folle).
@@ -210,7 +233,7 @@ pub async fn controller_session(
                 match ev {
                     Some(ev) => {
                         if enc.send(&ControllerMessage::Input(ev)).await.is_err() {
-                            return SessionEnd::Dropped;
+                            return drop_end(established);
                         }
                     }
                     None => {

@@ -88,7 +88,7 @@ app/viewerkiller/    lib : host.rs, controller.rs, security.rs
 
 ## Build & test
 ```bash
-cargo test --workspace      # 42 tests, tous verts sur Linux
+cargo test --workspace      # 43 tests, tous verts sur Linux
 cargo build --workspace
 # Vérif du code Windows (#[cfg(windows)]) sans machine Windows, type-check seul :
 rustup target add x86_64-pc-windows-gnu

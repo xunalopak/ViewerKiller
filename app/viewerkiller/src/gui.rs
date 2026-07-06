@@ -466,6 +466,26 @@ impl eframe::App for App {
                 if session.disconnected {
                     next = Some(Screen::Error("Session terminée.".into()));
                 } else {
+                    // Capture clavier EXCLUSIVE, avant de dessiner l'UI : on retire
+                    // les événements clavier de la file egui (sinon Tab déplace le
+                    // focus vers « Déconnecter » et Entrée l'active — `num_presses`
+                    // lit `events`), et on les transmet à l'hôte. Alt+Tab, touche
+                    // Windows et Ctrl+Alt+Suppr restent captés par l'OS local
+                    // (nécessiteraient un hook clavier bas niveau).
+                    let (mods, key_events) = ctx.input_mut(|i| {
+                        let captured = (i.modifiers, i.events.clone());
+                        i.events.retain(|e| !is_keyboard_event(e));
+                        captured
+                    });
+                    send_modifier_transitions(session, mods);
+                    let mut to_send = Vec::new();
+                    for event in &key_events {
+                        translate_key_event(event, &mut to_send);
+                    }
+                    for ev in to_send {
+                        let _ = session.input_tx.send(ev);
+                    }
+
                     egui::TopBottomPanel::top("barre").show(ctx, |ui| {
                         ui.horizontal(|ui| {
                             if let Some((w, h)) = session.remote_size {
@@ -588,20 +608,15 @@ fn draw_session(ui: &mut egui::Ui, session: &mut SessionScreen) {
         }
     }
 
-    // Boutons, molette, clavier.
-    let (primary, secondary, scroll, mods, key_events) = ui.input(|i| {
+    // Boutons souris + molette. (Le clavier est capté en amont, au niveau App,
+    // pour être retiré de la file egui avant que l'UI locale ne l'utilise.)
+    let (primary, secondary, scroll) = ui.input(|i| {
         (
             i.pointer.primary_down(),
             i.pointer.secondary_down(),
             i.raw_scroll_delta,
-            i.modifiers,
-            i.events.clone(),
         )
     });
-
-    // Modificateurs : envoyés par transitions, avant les touches de la frame
-    // (un Ctrl+C fraîchement pressé doit arriver Ctrl d'abord).
-    send_modifier_transitions(session, mods);
 
     if primary != session.primary_down {
         session.primary_down = primary;
@@ -623,15 +638,19 @@ fn draw_session(ui: &mut egui::Ui, session: &mut SessionScreen) {
             dy: scroll.y as i32,
         });
     }
+}
 
-    // Clavier : traduction déportée dans une fonction pure (testable).
-    let mut to_send = Vec::new();
-    for event in &key_events {
-        translate_key_event(event, &mut to_send);
-    }
-    for ev in to_send {
-        let _ = session.input_tx.send(ev);
-    }
+/// Un événement egui est-il d'origine clavier ? (utilisé pour retirer ces
+/// événements de la file egui et capter le clavier en exclusivité pour l'hôte).
+fn is_keyboard_event(e: &egui::Event) -> bool {
+    matches!(
+        e,
+        egui::Event::Key { .. }
+            | egui::Event::Text(_)
+            | egui::Event::Copy
+            | egui::Event::Cut
+            | egui::Event::Paste(_)
+    )
 }
 
 // Codes de touches virtuelles Windows des modificateurs.
