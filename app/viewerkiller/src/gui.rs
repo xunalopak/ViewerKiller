@@ -63,6 +63,8 @@ struct App {
     /// Réglages d'hébergement (modifiables sur l'accueil avant de démarrer).
     host_fps: u32,
     host_quality: u8,
+    /// Hook clavier système (Alt+Tab, touche Windows…) ; no-op hors Windows.
+    system_hook: Box<dyn vk_platform::SystemKeyHook>,
 }
 
 impl App {
@@ -83,6 +85,7 @@ impl App {
             update_info: None,
             host_fps: 15,
             host_quality: vk_media::DEFAULT_QUALITY,
+            system_hook: vk_platform::default_system_key_hook(),
         }
     }
 }
@@ -254,6 +257,18 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut next: Option<Screen> = None;
         let mut new_host_task: Option<tokio::task::JoinHandle<()>> = None;
+
+        // Hook clavier système : capture active UNIQUEMENT en session ET fenêtre au
+        // premier plan (sinon l'Alt+Tab de l'utilisateur serait détourné sur tout
+        // le système). Les frappes captées (Alt+Tab, touche Windows…) sont relayées
+        // à l'hôte dans la branche Session ci-dessous.
+        let hook_capture = matches!(self.screen, Screen::Session(_)) && ctx.input(|i| i.focused);
+        self.system_hook.set_capture(hook_capture);
+        let hook_keys = if hook_capture {
+            self.system_hook.poll()
+        } else {
+            Vec::new()
+        };
 
         // Récupère (une fois) le résultat de la vérification de mise à jour.
         if self.update_info.is_none() {
@@ -484,6 +499,14 @@ impl eframe::App for App {
                     }
                     for ev in to_send {
                         let _ = session.input_tx.send(ev);
+                    }
+                    // Touches système captées par le hook bas niveau (Alt+Tab,
+                    // touche Windows, Alt+F4/Échap, Ctrl+Échap…) → relayées à l'hôte.
+                    for ks in &hook_keys {
+                        let _ = session.input_tx.send(InputEvent::Key {
+                            key: ks.vk,
+                            pressed: ks.pressed,
+                        });
                     }
 
                     egui::TopBottomPanel::top("barre").show(ctx, |ui| {

@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.15"
+version = "0.1.16"
 edition = "2021"
 # Source-visible, non commerciale, sans modification, avec attribution —
 # voir le fichier LICENSE. Pas une licence libre / open source.

@@ -212,8 +212,10 @@ maîtrisées et un chemin auditable.
       coupure → reconnexion → **la pop-up de demande rebondissait**. Délai
       d'attente pré-établissement allongé (45 s) pour couvrir le consentement.
       Régression : `no_reconnect_when_session_never_established`.
-- [ ] **Touches système** (Alt+Tab, touche Windows, Ctrl+Alt+Suppr) : captées par
-      l'OS **local** du contrôleur avant egui → nécessitent un **hook clavier bas
-      niveau** (`WH_KEYBOARD_LL`, Windows) pour les intercepter et les relayer. À
-      faire (le reste du clavier — modificateurs, F-keys, flèches, raccourcis —
-      fonctionne).
+- [x] **Touches système (v0.1.16)** : Alt+Tab, touche Windows, `Win+<x>`, Alt+Échap,
+      Alt+F4, Ctrl+Échap sont captées par un **hook clavier bas niveau**
+      (`WH_KEYBOARD_LL`, thread dédié + boucle de messages, `vk-platform/windows.rs`)
+      **uniquement en session au premier plan**, supprimées en local et relayées à
+      l'hôte. Logique de sélection pure et testée (`should_capture_system_key`,
+      exclut AltGr/modificateurs nus). **Reste hors de portée** : `Ctrl+Alt+Suppr`
+      (SAS / bureau sécurisé, non captable par un hook standard).

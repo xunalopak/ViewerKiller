@@ -1,6 +1,6 @@
 # ViewerKiller — recette runtime (à jouer sur 2 PC)
 
-> Cible : **v0.1.15** (protocole **v5**). Toute la chaîne est vérifiée en CI
+> Cible : **v0.1.16** (protocole **v5**). Toute la chaîne est vérifiée en CI
 > (compilation + tests Linux/Windows), mais la capture d'écran, l'injection
 > clavier/souris et le presse-papiers ne se valident qu'**en vrai, sur Windows**.
 > Rejouer cette liste à chaque release. Coche au fur et à mesure ; note le
@@ -95,10 +95,15 @@ Ouvre le Bloc-notes sur PC-A et tape **depuis PC-B** :
 - [ ] **6.9** **Tab** puis **Entrée** dans un formulaire distant → la session
       **ne se ferme pas** (corrigé en v0.1.15 : le clavier est capté en
       exclusivité, Entrée n'active plus « Déconnecter »).
-- [ ] **6.10** *(limitation connue)* **Alt+Tab**, **touche Windows** et
-      **Ctrl+Alt+Suppr** agissent encore sur le PC **contrôleur** (captés par
-      l'OS local) — non relayés tant qu'un hook clavier bas niveau n'est pas
-      ajouté. À noter, pas un échec.
+- [ ] **6.10** ⭐ **Alt+Tab**, **touche Windows** (et **Win+D**, **Win+E**),
+      **Alt+F4**, **Ctrl+Échap** agissent sur le PC **distant** (corrigé en
+      v0.1.16 : hook clavier bas niveau, actif **seulement quand la fenêtre
+      contrôleur a le focus**). Pour « sortir » du contrôleur, clique ailleurs à la
+      **souris** (l'Alt+Tab part au distant). **Ctrl+Alt+Suppr** reste local (non
+      captable par un hook — normal).
+- [ ] **6.11** Vérifie que **hors session** (accueil, écran hôte), ton **Alt+Tab
+      normal fonctionne** (le hook ne doit capter que fenêtre contrôleur focus +
+      session active).
 - [ ] **6.8** Vérifie qu'il n'y a **pas de double saisie** (ex. l'espace ou une
       lettre qui sort deux fois) ni de **touche restée bloquée** après coup
       (relâche bien Ctrl/Shift/Alt).
@@ -196,4 +201,4 @@ n'a pas été testée au runtime).
 1. Note le **numéro** et ce que tu as vu (message exact, capture éventuelle).
 2. Si c'est côté hôte, relance l'hôte en **CLI** (`viewerkiller host`, au besoin
    `set RUST_LOG=debug`) pour capturer le journal d'audit et colle-le-moi.
-3. Précise si les **deux** PC sont bien en v0.1.15.
+3. Précise si les **deux** PC sont bien en v0.1.16.

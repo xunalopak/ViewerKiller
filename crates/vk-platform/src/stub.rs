@@ -4,7 +4,7 @@
 //! valider la chaîne réseau et le rendu de l'UI sans matériel Windows.
 //! L'injecteur ignore silencieusement les événements.
 
-use crate::{Clipboard, Frame, InputInjector, ScreenCapturer};
+use crate::{Clipboard, Frame, InputInjector, KeyStroke, ScreenCapturer, SystemKeyHook};
 use vk_core::protocol::MouseButton;
 
 pub struct StubCapturer {
@@ -75,4 +75,14 @@ impl Clipboard for StubClipboard {
         None
     }
     fn set_text(&mut self, _text: &str) {}
+}
+
+/// Hook clavier système factice : ne capte rien (hors Windows).
+pub struct StubSystemKeyHook;
+
+impl SystemKeyHook for StubSystemKeyHook {
+    fn set_capture(&self, _active: bool) {}
+    fn poll(&mut self) -> Vec<KeyStroke> {
+        Vec::new()
+    }
 }
