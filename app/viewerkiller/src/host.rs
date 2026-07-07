@@ -16,7 +16,7 @@ use vk_core::protocol::{
     ControllerMessage, DiscoveryMessage, HostMessage, InputEvent, KEEPALIVE_INTERVAL,
     PROTO_VERSION, SESSION_TIMEOUT,
 };
-use vk_media::TileEncoder;
+use vk_media::{QualityController, TileEncoder};
 use vk_net::frame::{read_framed, write_framed};
 use vk_net::transport::EncryptedStream;
 use vk_net::NetError;
@@ -184,6 +184,9 @@ async fn host_session(
         .await?;
 
     let mut encoder = TileEncoder::new(config.tile_size, config.quality);
+    // Qualité adaptative (J10b) : baisse la qualité JPEG si une trame déborde la
+    // période (réseau lent), remonte quand la marge revient.
+    let mut quality_ctl = QualityController::new(config.quality);
     let period = Duration::from_secs_f64(1.0 / config.fps.max(1) as f64);
     let mut ticker = tokio::time::interval(period);
     // Cadence adaptative : si une trame (capture + encode + envoi) déborde la
@@ -212,6 +215,7 @@ async fn host_session(
     loop {
         tokio::select! {
             _ = ticker.tick() => {
+                let cycle_start = Instant::now();
                 if let Some(frame) = capturer.capture()? {
                     // L'encodage JPEG est synchrone et coûteux : on le sort du
                     // runtime async (spawn_blocking) pour ne pas monopoliser un
@@ -230,6 +234,9 @@ async fn host_session(
                     {
                         break; // contrôleur parti
                     }
+                    // Qualité adaptative : ajuste selon le temps réel du cycle.
+                    quality_ctl.observe(cycle_start.elapsed(), period);
+                    encoder.set_quality(quality_ctl.quality());
                 }
                 // Curseur distant : signale au contrôleur tout changement de type.
                 if let Some(cur) = vk_platform::probe_cursor() {

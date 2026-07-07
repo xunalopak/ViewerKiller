@@ -11,6 +11,8 @@
 //! dépendance système, donc compilable et testable sur n'importe quelle
 //! plateforme.
 
+use std::time::Duration;
+
 use vk_core::protocol::{FrameUpdate, Tile, TileCodec};
 use vk_platform::Frame;
 
@@ -30,6 +32,61 @@ pub enum MediaError {
 pub const DEFAULT_TILE_SIZE: u32 = 128;
 /// Qualité JPEG par défaut (0–100).
 pub const DEFAULT_QUALITY: u8 = 75;
+
+/// Qualité JPEG minimale sous forte contrainte (J10b) : en dessous, l'image
+/// devient inexploitable ; on préfère baisser le débit d'images.
+pub const MIN_QUALITY: u8 = 30;
+
+/// Régulateur de qualité adaptatif (J10b) : ajuste la qualité JPEG selon le temps
+/// réel de traitement d'une trame (capture + encodage + envoi) comparé à la
+/// période cible. Si le cycle **déborde** (réseau lent, backpressure), la qualité
+/// baisse pour réduire le débit ; si la marge est **confortable**, elle remonte
+/// progressivement vers le maximum configuré. Hystérésis pour éviter les
+/// oscillations. Logique pure, testable sans réseau.
+#[derive(Debug, Clone)]
+pub struct QualityController {
+    current: u8,
+    max: u8,
+    min: u8,
+    /// Nombre de cycles confortables consécutifs (avant de remonter la qualité).
+    good_streak: u32,
+}
+
+impl QualityController {
+    /// `max` = qualité configurée (plafond ; aussi la valeur de départ).
+    pub fn new(max: u8) -> Self {
+        Self {
+            current: max,
+            max,
+            min: MIN_QUALITY.min(max),
+            good_streak: 0,
+        }
+    }
+
+    /// Qualité JPEG courante à appliquer à l'encodeur.
+    pub fn quality(&self) -> u8 {
+        self.current
+    }
+
+    /// Met à jour la qualité d'après le temps de cycle `cycle` d'une trame et la
+    /// période cible `period` (= 1/fps).
+    pub fn observe(&mut self, cycle: Duration, period: Duration) {
+        if cycle > period.mul_f64(1.3) {
+            // Débordement franc : on baisse vite pour dégager du débit.
+            self.current = self.current.saturating_sub(8).max(self.min);
+            self.good_streak = 0;
+        } else if cycle < period.mul_f64(0.6) {
+            // Large marge : on remonte doucement (après plusieurs bons cycles).
+            self.good_streak += 1;
+            if self.good_streak >= 10 {
+                self.current = (self.current + 3).min(self.max);
+                self.good_streak = 0;
+            }
+        } else {
+            self.good_streak = 0;
+        }
+    }
+}
 
 /// Encodeur incrémental : n'émet que les tuiles modifiées entre deux trames.
 pub struct TileEncoder {
@@ -56,6 +113,11 @@ impl TileEncoder {
     /// Force la prochaine trame à être émise intégralement (toutes les tuiles).
     pub fn force_full_frame(&mut self) {
         self.prev = None;
+    }
+
+    /// Ajuste la qualité JPEG à chaud (cadence/qualité adaptatives, J10b).
+    pub fn set_quality(&mut self, quality: u8) {
+        self.quality = quality;
     }
 
     /// Encode `frame` en ne conservant que les tuiles modifiées.
@@ -278,6 +340,41 @@ fn l8_to_rgba(l: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn quality_drops_under_overrun_and_recovers() {
+        let period = Duration::from_millis(66); // ~15 fps
+        let mut q = QualityController::new(75);
+        assert_eq!(q.quality(), 75);
+        // Débordement répété → la qualité baisse.
+        for _ in 0..3 {
+            q.observe(Duration::from_millis(200), period);
+        }
+        let low = q.quality();
+        assert!(low < 75, "la qualité aurait dû baisser (={low})");
+        // Marge confortable prolongée → la qualité remonte.
+        for _ in 0..40 {
+            q.observe(Duration::from_millis(10), period);
+        }
+        assert!(q.quality() > low, "la qualité aurait dû remonter");
+    }
+
+    #[test]
+    fn quality_stays_within_bounds() {
+        let period = Duration::from_millis(66);
+        let mut q = QualityController::new(75);
+        for _ in 0..50 {
+            q.observe(Duration::from_millis(500), period);
+        }
+        assert!(
+            q.quality() >= MIN_QUALITY,
+            "ne descend pas sous le plancher"
+        );
+        for _ in 0..500 {
+            q.observe(Duration::from_millis(1), period);
+        }
+        assert_eq!(q.quality(), 75, "ne dépasse pas le plafond configuré");
+    }
 
     fn solid_frame(width: u32, height: u32, bgra: [u8; 4]) -> Frame {
         let mut data = Vec::with_capacity((width * height * 4) as usize);

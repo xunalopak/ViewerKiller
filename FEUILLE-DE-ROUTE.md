@@ -44,8 +44,11 @@ mot de passe prenait la main sans que l'hôte ne voie rien.
 - [x] Cadence adaptative : `MissedTickBehavior::Skip` sur le ticker de trames
       (et le ticker presse-papiers) — sous charge, on saute les ticks manqués
       au lieu de les rattraper en rafale, donc pas d'accumulation de retard.
-- [ ] (**J10b**) fps/qualité *dynamiques* (mesure de latence) — au-delà du
-      simple Skip.
+- [x] **Qualité adaptative (v0.1.19)** : `QualityController` (vk-media) mesure le
+      temps réel de chaque cycle (capture + encode + envoi) vs la période cible ;
+      s'il déborde (réseau lent / backpressure), la qualité JPEG baisse (jusqu'à
+      `MIN_QUALITY`), et remonte vers le max quand la marge revient (hystérésis).
+      Logique pure testée. (Reste J10b-capture : DXGI ci-dessous.)
 
 ## J10b — Capture DXGI Desktop Duplication
 
