@@ -31,6 +31,8 @@ if-addrs.workspace = true
 rand.workspace = true
 eframe.workspace = true
 egui.workspace = true
+# Enregistrement des captures du mode caché `--ui-shot` (revue visuelle d'UI).
+jpeg-encoder.workspace = true
 ureq.workspace = true
 native-tls.workspace = true
 serde_json.workspace = true

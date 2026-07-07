@@ -104,6 +104,13 @@ fn brand_header(ui: &mut egui::Ui, subtitle: &str) {
         let (rect, _) = ui.allocate_exact_size(egui::vec2(30.0, 30.0), egui::Sense::hover());
         ui.painter()
             .rect_filled(rect, egui::Rounding::same(9.0), theme::ACCENT);
+        ui.painter().text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "VK",
+            egui::FontId::proportional(13.0),
+            theme::ON_ACCENT,
+        );
         ui.add_space(4.0);
         ui.vertical(|ui| {
             ui.label(egui::RichText::new("ViewerKiller").size(19.0).strong());
@@ -138,7 +145,7 @@ fn status_pill(ui: &mut egui::Ui, color: egui::Color32, text: &str) {
 /// Petit bouton « copier ».
 fn copy_button(ui: &mut egui::Ui) -> egui::Response {
     ui.add(
-        egui::Button::new(egui::RichText::new("⧉").color(theme::MUTED))
+        egui::Button::new(egui::RichText::new("📋").color(theme::MUTED))
             .min_size(egui::vec2(30.0, 30.0)),
     )
     .on_hover_text("Copier")
@@ -170,6 +177,13 @@ fn main() -> eframe::Result {
     // Nettoie un éventuel ancien binaire laissé par une mise à jour (J16b).
     viewerkiller::update::cleanup_old_update();
 
+    // Mode caché `--ui-shot [dossier]` : parcourt tous les écrans avec des
+    // données factices, enregistre une capture JPEG de chacun puis quitte.
+    // Sert à la revue visuelle de l'UI et aux captures de documentation.
+    let args: Vec<String> = std::env::args().collect();
+    let shot_dir = (args.get(1).map(String::as_str) == Some("--ui-shot"))
+        .then(|| args.get(2).cloned().unwrap_or_else(|| "ui-shots".into()));
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([960.0, 640.0]),
         ..Default::default()
@@ -177,9 +191,23 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "ViewerKiller",
         options,
-        Box::new(|cc| {
+        Box::new(move |cc| {
             apply_theme(&cc.egui_ctx);
-            Ok(Box::new(App::new()))
+            let mut app = App::new();
+            if let Some(dir) = shot_dir {
+                std::fs::create_dir_all(&dir).ok();
+                // Neutralise la vraie vérification de mise à jour : la bannière
+                // ne doit apparaître que dans le scénario qui la simule.
+                app.update_rx = std_mpsc::channel().1;
+                app.shots = Some(ShotRunner {
+                    dir: dir.into(),
+                    idx: 0,
+                    frames: 0,
+                    pending: false,
+                });
+                app.apply_shot_scenario(0);
+            }
+            Ok(Box::new(app))
         }),
     )
 }
@@ -212,6 +240,8 @@ struct App {
     update_status: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Formulaire de connexion de l'accueil (persistant entre navigations).
     home_form: ConnectForm,
+    /// Mode capture d'écrans `--ui-shot` (revue visuelle) ; `None` en usage normal.
+    shots: Option<ShotRunner>,
 }
 
 impl App {
@@ -235,7 +265,171 @@ impl App {
             system_hook: vk_platform::default_system_key_hook(),
             update_status: std::sync::Arc::new(std::sync::Mutex::new(None)),
             home_form: ConnectForm::default(),
+            shots: None,
         }
+    }
+}
+
+// --- Mode capture d'UI (`--ui-shot`) ----------------------------------------
+
+/// Pilote du mode `--ui-shot` : enchaîne les scénarios de [`SHOT_SCENARIOS`],
+/// demande une capture une fois le rendu stabilisé, l'enregistre, passe au
+/// scénario suivant, puis quitte le processus après le dernier.
+struct ShotRunner {
+    dir: std::path::PathBuf,
+    /// Scénario courant (index dans [`SHOT_SCENARIOS`]).
+    idx: usize,
+    /// Trames rendues depuis le changement de scénario (le layout doit se
+    /// stabiliser avant la capture).
+    frames: u32,
+    /// Capture demandée, en attente de l'événement `Screenshot`.
+    pending: bool,
+}
+
+/// Écrans capturés par le mode `--ui-shot`, dans l'ordre.
+const SHOT_SCENARIOS: &[&str] = &[
+    "01-accueil",
+    "02-accueil-maj",
+    "03-hote-attente",
+    "04-hote-consentement",
+    "05-hote-session",
+    "06-connexion",
+    "07-erreur",
+    "08-session",
+];
+
+impl App {
+    /// Installe l'état factice du scénario `idx` (mode `--ui-shot`).
+    fn apply_shot_scenario(&mut self, idx: usize) {
+        self.update_info = None;
+        self.screen = match SHOT_SCENARIOS[idx] {
+            "01-accueil" => Screen::Home,
+            "02-accueil-maj" => {
+                self.update_info = Some(viewerkiller::update::UpdateInfo {
+                    latest: "0.9.9".into(),
+                    url: "https://github.com/xunalopak/ViewerKiller/releases".into(),
+                });
+                Screen::Home
+            }
+            "03-hote-attente" => Screen::Host(shot_host_screen(None, false)),
+            "04-hote-consentement" => Screen::Host(shot_host_screen(None, true)),
+            "05-hote-session" => Screen::Host(shot_host_screen(
+                Some("192.168.1.37:52814".parse().unwrap()),
+                false,
+            )),
+            "06-connexion" => Screen::Connecting,
+            "07-erreur" => Screen::Error("Connexion refusée par l'hôte.".into()),
+            "08-session" => Screen::Session(shot_session_screen()),
+            autre => unreachable!("scénario --ui-shot inconnu : {autre}"),
+        };
+    }
+
+    /// Fait avancer le mode `--ui-shot` d'une trame : enregistre les captures
+    /// arrivées, change de scénario, et déclenche la capture suivante.
+    fn drive_shots(&mut self, ctx: &egui::Context) {
+        if self.shots.is_none() {
+            return;
+        }
+        let images: Vec<std::sync::Arc<egui::ColorImage>> = ctx.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                    _ => None,
+                })
+                .collect()
+        });
+        for image in images {
+            let (dir, idx) = {
+                let s = self.shots.as_ref().unwrap();
+                (s.dir.clone(), s.idx)
+            };
+            save_shot(&dir.join(format!("{}.jpg", SHOT_SCENARIOS[idx])), &image);
+            let next_idx = idx + 1;
+            if next_idx >= SHOT_SCENARIOS.len() {
+                // Toutes les captures sont écrites : fin du mode revue.
+                std::process::exit(0);
+            }
+            {
+                let s = self.shots.as_mut().unwrap();
+                s.idx = next_idx;
+                s.frames = 0;
+                s.pending = false;
+            }
+            self.apply_shot_scenario(next_idx);
+        }
+        let s = self.shots.as_mut().unwrap();
+        if !s.pending {
+            s.frames += 1;
+            if s.frames >= 5 {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot);
+                s.pending = true;
+            }
+        }
+        ctx.request_repaint();
+    }
+}
+
+/// Écran hôte factice pour `--ui-shot` (identifiants réalistes, IP locales).
+fn shot_host_screen(active: Option<SocketAddr>, with_pending: bool) -> HostScreen {
+    let (code, password) = viewerkiller::generate_credentials();
+    let (_tx, consent_rx) = mpsc::unbounded_channel();
+    let pending = with_pending.then(|| {
+        let (reply, _ignored) = oneshot::channel();
+        PendingConsent {
+            peer: "192.168.1.37:52814".parse().unwrap(),
+            reply,
+        }
+    });
+    HostScreen {
+        code,
+        password,
+        addresses: local_ipv4_addresses(),
+        consent_rx,
+        pending,
+        active,
+    }
+}
+
+/// Écran session factice pour `--ui-shot` : écran distant 1280×720 (noir) et
+/// deux moniteurs annoncés, pour rendre la barre d'outils complète.
+fn shot_session_screen() -> SessionScreen {
+    let (events_tx, events_rx) = mpsc::unbounded_channel();
+    let (input_tx, _input_rx) = mpsc::unbounded_channel();
+    let (monitor_tx, _monitor_rx) = mpsc::unbounded_channel();
+    let _ = events_tx.send(SessionEvent::ScreenInfo {
+        width: 1280,
+        height: 720,
+    });
+    let _ = events_tx.send(SessionEvent::Monitors(vec![
+        vk_core::protocol::MonitorInfo {
+            index: 0,
+            width: 1920,
+            height: 1080,
+            primary: true,
+        },
+        vk_core::protocol::MonitorInfo {
+            index: 1,
+            width: 1920,
+            height: 1080,
+            primary: false,
+        },
+    ]));
+    SessionScreen::new(events_rx, input_tx, monitor_tx)
+}
+
+/// Enregistre une capture egui en JPEG (qualité 92).
+fn save_shot(path: &std::path::Path, image: &egui::ColorImage) {
+    let [w, h] = image.size;
+    let mut rgb = Vec::with_capacity(w * h * 3);
+    for px in &image.pixels {
+        rgb.extend_from_slice(&[px.r(), px.g(), px.b()]);
+    }
+    let result = jpeg_encoder::Encoder::new_file(path, 92)
+        .and_then(|enc| enc.encode(&rgb, w as u16, h as u16, jpeg_encoder::ColorType::Rgb));
+    match result {
+        Ok(()) => println!("capture → {}", path.display()),
+        Err(e) => eprintln!("capture échouée ({}) : {e}", path.display()),
     }
 }
 
@@ -413,6 +607,9 @@ impl SessionScreen {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Mode revue d'UI : enchaîne les scénarios et enregistre les captures.
+        self.drive_shots(ctx);
+
         let mut next: Option<Screen> = None;
         let mut new_host_task: Option<tokio::task::JoinHandle<()>> = None;
 
@@ -516,8 +713,12 @@ impl eframe::App for App {
                                 ui.add_space(16.0);
                             }
 
+                            // Hauteur intérieure commune aux deux cartes, pour
+                            // qu'elles s'alignent (la droite dicte la hauteur).
+                            const CARD_H: f32 = 238.0;
                             ui.columns(2, |cols| {
                                 card(&mut cols[0], |ui| {
+                                    ui.set_min_height(CARD_H);
                                     ui.label(
                                         egui::RichText::new("🖥  Héberger ce poste")
                                             .size(15.0)
@@ -530,7 +731,14 @@ impl eframe::App for App {
                                         .color(theme::MUTED)
                                         .size(12.5),
                                     );
-                                    ui.add_space(8.0);
+                                    // Bouton calé en bas de la carte, aligné sur
+                                    // le « Se connecter » de la carte voisine :
+                                    // on insère l'espace restant jusqu'à CARD_H
+                                    // (40 = hauteur du bouton primaire). NB :
+                                    // `min_rect()` vaudrait déjà CARD_H à cause de
+                                    // `set_min_height` — on mesure via le curseur.
+                                    let used = ui.cursor().top() - ui.min_rect().top();
+                                    ui.add_space((CARD_H - used - 40.0).max(8.0));
                                     if primary_button(ui, "Démarrer l'hébergement").clicked() {
                                         let (screen, task) =
                                             start_host(&self.rt, self.host_fps, self.host_quality);
@@ -539,6 +747,7 @@ impl eframe::App for App {
                                     }
                                 });
                                 card(&mut cols[1], |ui| {
+                                    ui.set_min_height(CARD_H);
                                     ui.label(
                                         egui::RichText::new("🔗  Se connecter à un poste")
                                             .size(15.0)
@@ -557,7 +766,10 @@ impl eframe::App for App {
                                         &mut self.home_form.password,
                                         true,
                                     );
-                                    ui.add_space(8.0);
+                                    // Même calage en bas que la carte voisine,
+                                    // pour que les deux boutons s'alignent.
+                                    let used = ui.cursor().top() - ui.min_rect().top();
+                                    ui.add_space((CARD_H - used - 40.0).max(8.0));
                                     if primary_button(ui, "Se connecter").clicked() {
                                         match start_connect(&self.rt, &self.home_form) {
                                             Ok(screen) => next = Some(screen),
@@ -688,7 +900,12 @@ impl eframe::App for App {
 
                                 ui.add_space(18.0);
                                 ui.horizontal(|ui| {
-                                    if ui.button("Arrêter l'hébergement").clicked() {
+                                    let stop = egui::Button::new(
+                                        egui::RichText::new("Arrêter l'hébergement")
+                                            .color(theme::DANGER),
+                                    )
+                                    .stroke(egui::Stroke::new(1.0, theme::DANGER));
+                                    if ui.add(stop).clicked() {
                                         next = Some(Screen::Home);
                                     }
                                     if ui.button("Copier les identifiants").clicked() {
@@ -709,23 +926,37 @@ impl eframe::App for App {
                         .resizable(false)
                         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                         .show(ctx, |ui| {
+                            ui.add_space(4.0);
                             ui.label(format!(
                                 "{peer} souhaite prendre le contrôle de cet ordinateur."
                             ));
-                            ui.add_space(12.0);
+                            ui.add_space(14.0);
                             ui.horizontal(|ui| {
-                                if ui.button("Accepter").clicked() {
+                                let accept = egui::Button::new(
+                                    egui::RichText::new("Accepter")
+                                        .color(theme::ON_ACCENT)
+                                        .strong(),
+                                )
+                                .fill(theme::ACCENT)
+                                .min_size(egui::vec2(110.0, 32.0));
+                                if ui.add(accept).clicked() {
                                     if let Some(p) = host.pending.take() {
                                         let _ = p.reply.send(true);
                                         host.active = Some(p.peer);
                                     }
                                 }
-                                if ui.button("Refuser").clicked() {
+                                let refuse = egui::Button::new(
+                                    egui::RichText::new("Refuser").color(theme::DANGER),
+                                )
+                                .stroke(egui::Stroke::new(1.0, theme::DANGER))
+                                .min_size(egui::vec2(110.0, 32.0));
+                                if ui.add(refuse).clicked() {
                                     if let Some(p) = host.pending.take() {
                                         let _ = p.reply.send(false);
                                     }
                                 }
                             });
+                            ui.add_space(2.0);
                         });
                 }
 
@@ -817,7 +1048,7 @@ impl eframe::App for App {
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
                                     let dc = egui::Button::new(
-                                        egui::RichText::new("⏻  Déconnecter").color(theme::DANGER),
+                                        egui::RichText::new("✖  Déconnecter").color(theme::DANGER),
                                     )
                                     .stroke(egui::Stroke::new(1.0, theme::DANGER));
                                     if ui.add(dc).clicked() {
