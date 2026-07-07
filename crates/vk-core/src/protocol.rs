@@ -5,7 +5,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 /// Version du protocole, incrémentée à chaque changement incompatible.
-pub const PROTO_VERSION: u16 = 5;
+pub const PROTO_VERSION: u16 = 6;
 
 /// Port TCP par défaut de l'agent hôte.
 pub const DEFAULT_PORT: u16 = 47600;
@@ -40,6 +40,25 @@ pub enum MouseButton {
     Left,
     Right,
     Middle,
+}
+
+/// Type (forme sémantique) du curseur de l'hôte, pour que le contrôleur adapte
+/// son propre curseur (curseur distant, J12). On transmet le **type** plutôt que
+/// l'image : pas de latence, pas d'extraction de bitmap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CursorKind {
+    Default,
+    Text,
+    Hand,
+    Wait,
+    Progress,
+    Crosshair,
+    Move,
+    NotAllowed,
+    ResizeNS,
+    ResizeEW,
+    ResizeNESW,
+    ResizeNWSE,
 }
 
 /// Événement d'entrée envoyé par le contrôleur vers l'hôte.
@@ -151,4 +170,10 @@ pub enum HostMessage {
     /// Liste des moniteurs disponibles, envoyée en début de session (J12).
     /// **Fin d'enum.**
     Monitors(Vec<MonitorInfo>),
+    /// Type de curseur courant de l'hôte + visibilité (curseur distant, J12).
+    /// Envoyé quand il change. **Fin d'enum.**
+    Cursor {
+        kind: CursorKind,
+        visible: bool,
+    },
 }

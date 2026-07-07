@@ -160,6 +160,7 @@ async fn full_pipeline_screen_and_input() {
             }
             SessionEvent::ScreenInfo { .. } => {}
             SessionEvent::Monitors(_) => {}
+            SessionEvent::Cursor { .. } => {}
             SessionEvent::Reconnecting => {}
             SessionEvent::Disconnected => panic!("déconnexion prématurée"),
         }

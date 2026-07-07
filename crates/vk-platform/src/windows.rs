@@ -12,6 +12,7 @@ use std::mem::size_of;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 
+use windows::core::PCWSTR;
 use windows::Win32::Foundation::{BOOL, HINSTANCE, HWND, LPARAM, LRESULT, RECT, TRUE, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject,
@@ -29,16 +30,18 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL, MOUSEINPUT, MOUSE_EVENT_FLAGS, VIRTUAL_KEY,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, DispatchMessageW, GetMessageW, GetSystemMetrics, PostThreadMessageW,
-    SetWindowsHookExW, UnhookWindowsHookEx, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, MSG, SM_CXSCREEN,
-    SM_CYSCREEN, WH_KEYBOARD_LL, WM_KEYDOWN, WM_QUIT, WM_SYSKEYDOWN,
+    CallNextHookEx, DispatchMessageW, GetCursorInfo, GetMessageW, GetSystemMetrics, LoadCursorW,
+    PostThreadMessageW, SetWindowsHookExW, UnhookWindowsHookEx, CURSORINFO, CURSOR_SHOWING,
+    HCURSOR, HC_ACTION, HHOOK, IDC_APPSTARTING, IDC_CROSS, IDC_HAND, IDC_IBEAM, IDC_NO,
+    IDC_SIZEALL, IDC_SIZENESW, IDC_SIZENS, IDC_SIZENWSE, IDC_SIZEWE, IDC_WAIT, KBDLLHOOKSTRUCT,
+    MSG, SM_CXSCREEN, SM_CYSCREEN, WH_KEYBOARD_LL, WM_KEYDOWN, WM_QUIT, WM_SYSKEYDOWN,
 };
 
 use crate::{
-    should_capture_system_key, Clipboard, Frame, InputInjector, KeyStroke, ScreenCapturer,
-    SystemKeyHook,
+    should_capture_system_key, Clipboard, CursorState, Frame, InputInjector, KeyStroke,
+    ScreenCapturer, SystemKeyHook,
 };
-use vk_core::protocol::{MonitorInfo, MouseButton};
+use vk_core::protocol::{CursorKind, MonitorInfo, MouseButton};
 
 /// Drapeau `dwFlags` marquant le moniteur principal. Non exposé nommément par le
 /// crate `windows` 0.58 ; valeur stable de l'API Win32.
@@ -551,4 +554,55 @@ impl Drop for WindowsSystemKeyHook {
             let _ = PostThreadMessageW(self.thread_id, WM_QUIT, WPARAM(0), LPARAM(0));
         }
     }
+}
+
+// --- Curseur distant (J12) : type sémantique du curseur système ---------------
+
+/// Interroge le curseur système et déduit son **type** en comparant son handle
+/// aux curseurs standard. (La position est ignorée : le contrôleur sait déjà où
+/// pointe sa souris ; seule la forme lui manque.)
+pub fn probe_cursor() -> Option<CursorState> {
+    unsafe {
+        let mut ci = CURSORINFO {
+            cbSize: size_of::<CURSORINFO>() as u32,
+            ..Default::default()
+        };
+        GetCursorInfo(&mut ci).ok()?;
+        let visible = (ci.flags.0 & CURSOR_SHOWING.0) != 0;
+        Some(CursorState {
+            kind: cursor_kind_of(ci.hCursor),
+            visible,
+        })
+    }
+}
+
+/// Associe un handle de curseur au type standard correspondant (flèche par défaut
+/// si inconnu ou personnalisé).
+unsafe fn cursor_kind_of(h: HCURSOR) -> CursorKind {
+    if h.0.is_null() {
+        return CursorKind::Default;
+    }
+    let sys = |idc: PCWSTR| {
+        LoadCursorW(HINSTANCE::default(), idc)
+            .map(|c| c.0)
+            .unwrap_or(std::ptr::null_mut())
+    };
+    for (idc, kind) in [
+        (IDC_IBEAM, CursorKind::Text),
+        (IDC_HAND, CursorKind::Hand),
+        (IDC_WAIT, CursorKind::Wait),
+        (IDC_APPSTARTING, CursorKind::Progress),
+        (IDC_CROSS, CursorKind::Crosshair),
+        (IDC_SIZEALL, CursorKind::Move),
+        (IDC_NO, CursorKind::NotAllowed),
+        (IDC_SIZENS, CursorKind::ResizeNS),
+        (IDC_SIZEWE, CursorKind::ResizeEW),
+        (IDC_SIZENESW, CursorKind::ResizeNESW),
+        (IDC_SIZENWSE, CursorKind::ResizeNWSE),
+    ] {
+        if h.0 == sys(idc) {
+            return kind;
+        }
+    }
+    CursorKind::Default
 }

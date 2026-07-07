@@ -183,6 +183,20 @@ mod tests {
     }
 
     #[test]
+    fn cursor_message_round_trip() {
+        let visible = HostMessage::Cursor {
+            kind: CursorKind::Text,
+            visible: true,
+        };
+        assert_eq!(round_trip(&visible), visible);
+        let hidden = HostMessage::Cursor {
+            kind: CursorKind::ResizeNWSE,
+            visible: false,
+        };
+        assert_eq!(round_trip(&hidden), hidden);
+    }
+
+    #[test]
     fn oversize_length_prefix_rejected() {
         let mut reader = FrameReader::new();
         let bogus = ((MAX_FRAME_LEN + 1) as u32).to_be_bytes();

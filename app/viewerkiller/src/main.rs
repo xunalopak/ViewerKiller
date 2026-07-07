@@ -171,6 +171,7 @@ async fn run_connect(code: String, password: String, addr: SocketAddr) -> Result
             SessionEvent::Monitors(m) => {
                 tracing::info!(count = m.len(), "moniteurs disponibles côté hôte");
             }
+            SessionEvent::Cursor { .. } => {}
             SessionEvent::Reconnecting => {
                 tracing::warn!("connexion perdue — reconnexion en cours…");
             }

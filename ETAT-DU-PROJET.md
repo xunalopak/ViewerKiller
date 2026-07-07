@@ -88,7 +88,7 @@ app/viewerkiller/    lib : host.rs, controller.rs, security.rs
 
 ## Build & test
 ```bash
-cargo test --workspace      # 45 tests, tous verts sur Linux
+cargo test --workspace      # 47 tests, tous verts sur Linux
 cargo build --workspace
 # Vérif du code Windows (#[cfg(windows)]) sans machine Windows, type-check seul :
 rustup target add x86_64-pc-windows-gnu
@@ -113,9 +113,10 @@ et la perf :
    écran fluide ; tuiles natives « dirty rects ».
 
 ## Pièges connus / notes
-- **PROTO_VERSION = 5** : v0.1.5 = `InputEvent::Char` (texte Unicode, J8) ;
+- **PROTO_VERSION = 6** : v0.1.5 = `InputEvent::Char` (texte Unicode, J8) ;
   v0.1.7 = messages `Clipboard` (presse-papiers, J11) ; v0.1.9 = messages `Ping`
-  keepalive (J13) ; v0.1.14 = `Monitors` / `SelectMonitor` (multi-écrans, J12).
+  keepalive (J13) ; v0.1.14 = `Monitors` / `SelectMonitor` (multi-écrans, J12) ;
+  v0.1.17 = `Cursor` (type de curseur distant, J12).
   Les deux machines doivent exécuter la même version. Les nouveaux variants d'enum
   s'ajoutent **en fin** (postcard encode le discriminant par ordre de déclaration) ;
   l'hôte refuse et journalise une version incompatible.

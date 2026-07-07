@@ -180,6 +180,27 @@ pub fn default_injector() -> anyhow::Result<Box<dyn InputInjector>> {
     }
 }
 
+/// État courant du curseur de l'hôte (type sémantique + visibilité), pour le
+/// curseur distant (J12).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CursorState {
+    pub kind: vk_core::protocol::CursorKind,
+    pub visible: bool,
+}
+
+/// Interroge le curseur courant du système. `None` hors Windows ou si
+/// indisponible (le contrôleur garde alors son curseur par défaut).
+pub fn probe_cursor() -> Option<CursorState> {
+    #[cfg(windows)]
+    {
+        windows::probe_cursor()
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
 /// Construit l'accès presse-papiers adapté à la plateforme courante.
 pub fn default_clipboard() -> Box<dyn Clipboard> {
     #[cfg(windows)]

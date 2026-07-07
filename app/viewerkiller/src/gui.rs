@@ -20,7 +20,7 @@ use viewerkiller::{
     controller::connect_to, generate_credentials, local_ipv4_addresses, run_controller, serve,
     BruteForceGuard, ControllerConfig, HostConfig, ReconnectPolicy, SessionEvent,
 };
-use vk_core::protocol::{InputEvent, MouseButton, DEFAULT_PORT};
+use vk_core::protocol::{CursorKind, InputEvent, MouseButton, DEFAULT_PORT};
 use vk_media::FrameBuffer;
 
 fn main() -> eframe::Result {
@@ -185,6 +185,10 @@ struct SessionScreen {
     disconnected: bool,
     /// Connexion perdue, reconnexion automatique en cours (bannière).
     reconnecting: bool,
+    /// Type de curseur de l'hôte (curseur distant, J12) : le curseur local du
+    /// contrôleur s'y adapte au survol de l'image.
+    cursor_kind: CursorKind,
+    cursor_visible: bool,
 }
 
 impl SessionScreen {
@@ -207,6 +211,8 @@ impl SessionScreen {
             mods: egui::Modifiers::default(),
             disconnected: false,
             reconnecting: false,
+            cursor_kind: CursorKind::Default,
+            cursor_visible: true,
         }
     }
 
@@ -228,6 +234,10 @@ impl SessionScreen {
                     }
                 }
                 SessionEvent::Monitors(list) => self.monitors = list,
+                SessionEvent::Cursor { kind, visible } => {
+                    self.cursor_kind = kind;
+                    self.cursor_visible = visible;
+                }
                 SessionEvent::Reconnecting => self.reconnecting = true,
                 SessionEvent::Disconnected => self.disconnected = true,
             }
@@ -620,6 +630,18 @@ fn draw_session(ui: &mut egui::Ui, session: &mut SessionScreen) {
     let response = ui.add(image);
     let rect = response.rect;
 
+    // Curseur distant (J12) : au survol de l'image, le curseur local du contrôleur
+    // adopte la forme du curseur de l'hôte (texte, main, redimensionnement…) ;
+    // masqué côté hôte → masqué ici.
+    if response.hovered() {
+        let icon = if session.cursor_visible {
+            cursor_icon_of(session.cursor_kind)
+        } else {
+            egui::CursorIcon::None
+        };
+        ui.ctx().set_cursor_icon(icon);
+    }
+
     // Position souris → coordonnées écran distant.
     if let Some(pos) = response.hover_pos() {
         if rect.width() > 0.0 && rect.height() > 0.0 {
@@ -674,6 +696,24 @@ fn is_keyboard_event(e: &egui::Event) -> bool {
             | egui::Event::Cut
             | egui::Event::Paste(_)
     )
+}
+
+/// Associe un type de curseur distant (J12) à l'icône egui correspondante.
+fn cursor_icon_of(kind: CursorKind) -> egui::CursorIcon {
+    match kind {
+        CursorKind::Default => egui::CursorIcon::Default,
+        CursorKind::Text => egui::CursorIcon::Text,
+        CursorKind::Hand => egui::CursorIcon::PointingHand,
+        CursorKind::Wait => egui::CursorIcon::Wait,
+        CursorKind::Progress => egui::CursorIcon::Progress,
+        CursorKind::Crosshair => egui::CursorIcon::Crosshair,
+        CursorKind::Move => egui::CursorIcon::Move,
+        CursorKind::NotAllowed => egui::CursorIcon::NotAllowed,
+        CursorKind::ResizeNS => egui::CursorIcon::ResizeVertical,
+        CursorKind::ResizeEW => egui::CursorIcon::ResizeHorizontal,
+        CursorKind::ResizeNESW => egui::CursorIcon::ResizeNeSw,
+        CursorKind::ResizeNWSE => egui::CursorIcon::ResizeNwSe,
+    }
 }
 
 // Codes de touches virtuelles Windows des modificateurs.
@@ -1124,6 +1164,23 @@ mod tests {
                 key: 0x0D,
                 pressed: true
             }]
+        );
+    }
+
+    #[test]
+    fn cursor_kind_maps_to_egui_icon() {
+        assert_eq!(cursor_icon_of(CursorKind::Text), egui::CursorIcon::Text);
+        assert_eq!(
+            cursor_icon_of(CursorKind::Hand),
+            egui::CursorIcon::PointingHand
+        );
+        assert_eq!(
+            cursor_icon_of(CursorKind::ResizeNS),
+            egui::CursorIcon::ResizeVertical
+        );
+        assert_eq!(
+            cursor_icon_of(CursorKind::Default),
+            egui::CursorIcon::Default
         );
     }
 }

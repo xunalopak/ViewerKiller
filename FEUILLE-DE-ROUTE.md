@@ -68,7 +68,7 @@ l'autre.
       `HostConfig.share_clipboard` (hôte) et le paramètre `share_clipboard` de
       `controller_session` ; désactivé dans les tests.
 
-## J12 — Multi-écrans + curseur distant — **multi-écrans fait (v0.1.14)**
+## J12 — Multi-écrans + curseur distant — **fait (v0.1.14 + v0.1.17)**
 
 - [x] Énumération des moniteurs (Windows `EnumDisplayMonitors`) + choix côté
       contrôleur : `HostMessage::Monitors` en début de session,
@@ -79,9 +79,12 @@ l'autre.
       `ScreenCapturer::monitors`/`select_monitor` (défaut mono-écran). Testé via
       stub 2 moniteurs (`tests/multiscreen.rs`, bascule end-to-end) ; **la capture
       Windows multi-moniteur reste à valider au runtime**.
-- [ ] Forme réelle du curseur (`CURSORINFO`) dessinée côté contrôleur (reste à
-      faire — GDI ne capture pas le curseur ; le curseur local du contrôleur
-      donne un repère approximatif en attendant).
+- [x] **Curseur distant (v0.1.17)** : plutôt que d'extraire le bitmap du curseur
+      (fragile), l'hôte détecte le **type** de curseur (`GetCursorInfo` + comparaison
+      aux curseurs système `IDC_*`) et l'envoie (`HostMessage::Cursor`, protocole
+      → 6). Le contrôleur adapte son **curseur local** au survol de l'image
+      (`cursor_icon_of` → `egui::CursorIcon`) : texte, main, redimensionnement… →
+      **sémantique, sans latence, sans bitmap**. Mapping pur testé + round-trip codec.
 
 ## J13 — Reconnexion & robustesse — **fait (v0.1.9)**
 

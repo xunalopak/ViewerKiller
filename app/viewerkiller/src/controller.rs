@@ -10,8 +10,8 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use vk_core::crypto::derive_psk;
 use vk_core::protocol::{
-    ControllerMessage, DiscoveryMessage, FrameUpdate, HostMessage, InputEvent, MonitorInfo,
-    KEEPALIVE_INTERVAL, PROTO_VERSION, SESSION_TIMEOUT,
+    ControllerMessage, CursorKind, DiscoveryMessage, FrameUpdate, HostMessage, InputEvent,
+    MonitorInfo, KEEPALIVE_INTERVAL, PROTO_VERSION, SESSION_TIMEOUT,
 };
 use vk_net::frame::{read_framed, write_framed};
 use vk_net::transport::EncryptedStream;
@@ -44,6 +44,11 @@ pub enum SessionEvent {
     Frame(FrameUpdate),
     /// Liste des moniteurs de l'hôte (choix multi-écrans, J12).
     Monitors(Vec<MonitorInfo>),
+    /// Type de curseur courant de l'hôte (curseur distant, J12).
+    Cursor {
+        kind: CursorKind,
+        visible: bool,
+    },
     /// La connexion a été perdue ; une reconnexion automatique est en cours.
     Reconnecting,
     Disconnected,
@@ -186,6 +191,9 @@ pub async fn controller_session(
                     Ok(HostMessage::Ping) => {}
                     Ok(HostMessage::Monitors(list)) => {
                         let _ = events_tx.send(SessionEvent::Monitors(list));
+                    }
+                    Ok(HostMessage::Cursor { kind, visible }) => {
+                        let _ = events_tx.send(SessionEvent::Cursor { kind, visible });
                     }
                     Ok(HostMessage::Bye) => return SessionEnd::HostClosed,
                     Err(e) => {

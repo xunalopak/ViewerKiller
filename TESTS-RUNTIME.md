@@ -1,6 +1,6 @@
 # ViewerKiller — recette runtime (à jouer sur 2 PC)
 
-> Cible : **v0.1.16** (protocole **v5**). Toute la chaîne est vérifiée en CI
+> Cible : **v0.1.17** (protocole **v6**). Toute la chaîne est vérifiée en CI
 > (compilation + tests Linux/Windows), mais la capture d'écran, l'injection
 > clavier/souris et le presse-papiers ne se valident qu'**en vrai, sur Windows**.
 > Rejouer cette liste à chaque release. Coche au fur et à mesure ; note le
@@ -73,6 +73,10 @@ avant de lancer.
 - [ ] **5.4** **Molette horizontale** (v0.1.12) : sur un tableur ou une page
       large, le défilement **latéral** fonctionne (molette inclinable, ou
       Shift+molette selon l'application).
+- [ ] **5.5** ⭐ **Curseur distant (v0.1.17)** : survole un **champ de texte**
+      distant → ton curseur devient un **I** (texte) ; un **lien** → une **main** ;
+      un **bord de fenêtre** → une **flèche de redimensionnement**. La forme du
+      curseur local reflète celle de l'hôte.
 
 ## 6. Clavier (J8)
 
@@ -201,4 +205,4 @@ n'a pas été testée au runtime).
 1. Note le **numéro** et ce que tu as vu (message exact, capture éventuelle).
 2. Si c'est côté hôte, relance l'hôte en **CLI** (`viewerkiller host`, au besoin
    `set RUST_LOG=debug`) pour capturer le journal d'audit et colle-le-moi.
-3. Précise si les **deux** PC sont bien en v0.1.16.
+3. Précise si les **deux** PC sont bien en v0.1.17.

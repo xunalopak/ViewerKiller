@@ -206,6 +206,8 @@ async fn host_session(
     let mut watchdog = tokio::time::interval(KEEPALIVE_INTERVAL);
     watchdog.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut last_rx = Instant::now();
+    // Curseur distant (J12) : dernier type de curseur transmis (envoi au changement).
+    let mut last_cursor: Option<vk_platform::CursorState> = None;
 
     loop {
         tokio::select! {
@@ -227,6 +229,22 @@ async fn host_session(
                         && enc.send(&HostMessage::Frame(update)).await.is_err()
                     {
                         break; // contrôleur parti
+                    }
+                }
+                // Curseur distant : signale au contrôleur tout changement de type.
+                if let Some(cur) = vk_platform::probe_cursor() {
+                    if last_cursor != Some(cur) {
+                        last_cursor = Some(cur);
+                        if enc
+                            .send(&HostMessage::Cursor {
+                                kind: cur.kind,
+                                visible: cur.visible,
+                            })
+                            .await
+                            .is_err()
+                        {
+                            break; // contrôleur parti
+                        }
                     }
                 }
             }
