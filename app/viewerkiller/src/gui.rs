@@ -23,6 +23,143 @@ use viewerkiller::{
 use vk_core::protocol::{CursorKind, InputEvent, MouseButton, DEFAULT_PORT};
 use vk_media::FrameBuffer;
 
+/// Palette « Indigo Nuit » — thème sombre premium, accent indigo.
+mod theme {
+    use egui::Color32;
+    pub const BG: Color32 = Color32::from_rgb(0x0E, 0x10, 0x20);
+    pub const SURFACE: Color32 = Color32::from_rgb(0x17, 0x1A, 0x2E);
+    pub const SURFACE2: Color32 = Color32::from_rgb(0x20, 0x24, 0x3F);
+    pub const BORDER: Color32 = Color32::from_rgb(0x2E, 0x33, 0x50);
+    pub const TEXT: Color32 = Color32::from_rgb(0xE8, 0xE9, 0xF5);
+    pub const MUTED: Color32 = Color32::from_rgb(0x9A, 0x9D, 0xC0);
+    pub const ACCENT: Color32 = Color32::from_rgb(0x7C, 0x83, 0xFF);
+    pub const ON_ACCENT: Color32 = Color32::from_rgb(0x0B, 0x0D, 0x1C);
+    pub const SUCCESS: Color32 = Color32::from_rgb(0x4A, 0xDE, 0x80);
+    pub const DANGER: Color32 = Color32::from_rgb(0xFB, 0x71, 0x85);
+    pub const INPUT_BG: Color32 = Color32::from_rgb(0x0A, 0x0C, 0x18);
+}
+
+/// Applique le thème « Indigo Nuit » (couleurs, arrondis, espacements).
+fn apply_theme(ctx: &egui::Context) {
+    use egui::{Color32, Rounding, Stroke};
+    let mut v = egui::Visuals::dark();
+    v.override_text_color = Some(theme::TEXT);
+    v.panel_fill = theme::BG;
+    v.window_fill = theme::SURFACE;
+    v.window_stroke = Stroke::new(1.0, theme::BORDER);
+    v.window_rounding = Rounding::same(14.0);
+    v.faint_bg_color = theme::SURFACE;
+    v.extreme_bg_color = theme::INPUT_BG;
+    v.hyperlink_color = theme::ACCENT;
+    v.selection.bg_fill = Color32::from_rgba_unmultiplied(0x7C, 0x83, 0xFF, 80);
+    v.selection.stroke = Stroke::new(1.0, theme::ACCENT);
+
+    let r = Rounding::same(9.0);
+    let ws = &mut v.widgets;
+    for (w, fill, stroke) in [
+        (&mut ws.noninteractive, theme::SURFACE, theme::BORDER),
+        (&mut ws.inactive, theme::SURFACE2, theme::BORDER),
+        (&mut ws.hovered, theme::SURFACE2, theme::ACCENT),
+        (&mut ws.active, theme::SURFACE2, theme::ACCENT),
+    ] {
+        w.bg_fill = fill;
+        w.weak_bg_fill = fill;
+        w.bg_stroke = Stroke::new(1.0, stroke);
+        w.fg_stroke = Stroke::new(1.0, theme::TEXT);
+        w.rounding = r;
+    }
+    ws.noninteractive.fg_stroke = Stroke::new(1.0, theme::MUTED);
+    ctx.set_visuals(v);
+
+    let mut style = (*ctx.style()).clone();
+    style.spacing.item_spacing = egui::vec2(10.0, 10.0);
+    style.spacing.button_padding = egui::vec2(14.0, 9.0);
+    ctx.set_style(style);
+}
+
+/// Encadré « carte » : surface arrondie avec bordure et marge intérieure.
+fn card(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    egui::Frame::none()
+        .fill(theme::SURFACE)
+        .stroke(egui::Stroke::new(1.0, theme::BORDER))
+        .rounding(egui::Rounding::same(14.0))
+        .inner_margin(egui::Margin::same(18.0))
+        .show(ui, add);
+}
+
+/// Bouton d'action primaire (plein accent), pleine largeur.
+fn primary_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
+    let text = egui::RichText::new(label).color(theme::ON_ACCENT).strong();
+    ui.add_sized(
+        [ui.available_width(), 40.0],
+        egui::Button::new(text)
+            .fill(theme::ACCENT)
+            .rounding(egui::Rounding::same(10.0)),
+    )
+}
+
+/// En-tête de marque : monogramme + nom + sous-titre.
+fn brand_header(ui: &mut egui::Ui, subtitle: &str) {
+    ui.horizontal(|ui| {
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(30.0, 30.0), egui::Sense::hover());
+        ui.painter()
+            .rect_filled(rect, egui::Rounding::same(9.0), theme::ACCENT);
+        ui.add_space(4.0);
+        ui.vertical(|ui| {
+            ui.label(egui::RichText::new("ViewerKiller").size(19.0).strong());
+            ui.label(egui::RichText::new(subtitle).color(theme::MUTED).size(12.5));
+        });
+    });
+}
+
+/// Champ de saisie labellisé, pleine largeur.
+fn labeled_input(ui: &mut egui::Ui, label: &str, value: &mut String, password: bool) {
+    ui.label(egui::RichText::new(label).color(theme::MUTED).size(11.5));
+    let mut edit = egui::TextEdit::singleline(value).desired_width(f32::INFINITY);
+    if password {
+        edit = edit.password(true);
+    }
+    ui.add(edit);
+}
+
+/// Pastille d'état : point coloré + libellé.
+fn status_pill(ui: &mut egui::Ui, color: egui::Color32, text: &str) {
+    egui::Frame::none()
+        .fill(theme::SURFACE2)
+        .rounding(egui::Rounding::same(999.0))
+        .inner_margin(egui::Margin::symmetric(12.0, 6.0))
+        .show(ui, |ui| {
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+            ui.painter().circle_filled(rect.center(), 4.0, color);
+            ui.label(egui::RichText::new(text).size(12.5).color(theme::TEXT));
+        });
+}
+
+/// Petit bouton « copier ».
+fn copy_button(ui: &mut egui::Ui) -> egui::Response {
+    ui.add(
+        egui::Button::new(egui::RichText::new("⧉").color(theme::MUTED))
+            .min_size(egui::vec2(30.0, 30.0)),
+    )
+    .on_hover_text("Copier")
+}
+
+/// Puce affichant une adresse IP (interface · adresse).
+fn ip_chip(ui: &mut egui::Ui, name: &str, ip: &str) {
+    egui::Frame::none()
+        .fill(theme::INPUT_BG)
+        .stroke(egui::Stroke::new(1.0, theme::BORDER))
+        .rounding(egui::Rounding::same(8.0))
+        .inner_margin(egui::Margin::symmetric(10.0, 5.0))
+        .show(ui, |ui| {
+            ui.label(
+                egui::RichText::new(format!("{name} · {ip}"))
+                    .size(12.0)
+                    .color(theme::TEXT),
+            );
+        });
+}
+
 fn main() -> eframe::Result {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -40,14 +177,16 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "ViewerKiller",
         options,
-        Box::new(|_cc| Ok(Box::new(App::new()))),
+        Box::new(|cc| {
+            apply_theme(&cc.egui_ctx);
+            Ok(Box::new(App::new()))
+        }),
     )
 }
 
 enum Screen {
     Home,
     Host(HostScreen),
-    Connect(ConnectForm),
     Connecting,
     Session(SessionScreen),
     Error(String),
@@ -71,6 +210,8 @@ struct App {
     /// Statut de la mise à jour en cours (J16b) : `Some(msg)` = téléchargement ou
     /// échec ; partagé avec le thread de mise à jour.
     update_status: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    /// Formulaire de connexion de l'accueil (persistant entre navigations).
+    home_form: ConnectForm,
 }
 
 impl App {
@@ -93,6 +234,7 @@ impl App {
             host_quality: vk_media::DEFAULT_QUALITY,
             system_hook: vk_platform::default_system_key_hook(),
             update_status: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            home_form: ConnectForm::default(),
         }
     }
 }
@@ -102,7 +244,6 @@ impl App {
 struct HostScreen {
     code: String,
     password: String,
-    bind_addr: SocketAddr,
     /// Adresses IPv4 locales (Wi-Fi, Ethernet…) à communiquer au contrôleur.
     addresses: Vec<(String, Ipv4Addr)>,
     /// Demandes de consentement et fins de session en provenance du fil réseau.
@@ -297,76 +438,153 @@ impl eframe::App for App {
         match &mut self.screen {
             Screen::Home => {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.vertical_centered(|ui| {
-                        ui.add_space(120.0);
-                        ui.heading("ViewerKiller");
-                        ui.label("Contrôle à distance sécurisé, chiffré de bout en bout");
-                        ui.add_space(40.0);
-                        if ui.button("🖥  Héberger (être contrôlé)").clicked() {
-                            let (screen, task) =
-                                start_host(&self.rt, self.host_fps, self.host_quality);
-                            next = Some(screen);
-                            new_host_task = Some(task);
-                        }
-                        ui.add_space(10.0);
-                        if ui.button("🔗  Se connecter (contrôler)").clicked() {
-                            next = Some(Screen::Connect(ConnectForm::default()));
-                        }
-                        ui.add_space(18.0);
-                        ui.collapsing("⚙ Réglages d'hébergement", |ui| {
-                            ui.add(
-                                egui::Slider::new(&mut self.host_fps, 5..=30).text("Images / s"),
-                            );
-                            ui.add(
-                                egui::Slider::new(&mut self.host_quality, 40..=95)
-                                    .text("Qualité JPEG"),
-                            );
-                            ui.label(
-                                egui::RichText::new(
-                                    "Plus d'images/s et de qualité = plus fluide, mais plus de \
-                                     bande passante. À appliquer avant de démarrer l'hébergement.",
-                                )
-                                .weak()
-                                .small(),
-                            );
-                        });
-                        if let Some(info) = &self.update_info {
-                            ui.add_space(30.0);
-                            ui.colored_label(
-                                egui::Color32::from_rgb(0x40, 0xA0, 0xE0),
-                                format!(
-                                    "⬆ Nouvelle version disponible : v{} (actuelle v{})",
-                                    info.latest,
-                                    viewerkiller::update::CURRENT_VERSION
-                                ),
-                            );
-                            ui.hyperlink_to("Voir la release", &info.url);
-                            // J16b : téléchargement + vérif SHA256 + remplacement.
-                            let status = self.update_status.lock().unwrap().clone();
-                            match status {
-                                Some(msg) => {
-                                    ui.label(egui::RichText::new(msg).weak());
-                                }
-                                None => {
-                                    if ui.button("⬇  Mettre à jour maintenant").clicked() {
-                                        *self.update_status.lock().unwrap() =
-                                            Some("Téléchargement et vérification…".into());
-                                        let status = self.update_status.clone();
-                                        std::thread::spawn(move || {
-                                            // En cas de succès, self_update relance et
-                                            // quitte → ce thread meurt avec le process.
-                                            if let Err(e) = viewerkiller::update::self_update(
-                                                viewerkiller::update::ASSET_GUI,
-                                            ) {
-                                                *status.lock().unwrap() =
-                                                    Some(format!("Échec : {e:#}"));
-                                            }
+                    egui::Frame::none()
+                        .inner_margin(egui::Margin::symmetric(46.0, 34.0))
+                        .show(ui, |ui| {
+                            brand_header(ui, "Contrôle à distance chiffré de bout en bout");
+                            ui.add_space(24.0);
+
+                            if let Some(info) = &self.update_info {
+                                let (latest, url) = (info.latest.clone(), info.url.clone());
+                                egui::Frame::none()
+                                    .fill(theme::SURFACE2)
+                                    .stroke(egui::Stroke::new(1.0, theme::ACCENT))
+                                    .rounding(egui::Rounding::same(12.0))
+                                    .inner_margin(egui::Margin::same(14.0))
+                                    .show(ui, |ui| {
+                                        ui.horizontal(|ui| {
+                                            ui.label(
+                                                egui::RichText::new("⬆")
+                                                    .size(18.0)
+                                                    .color(theme::ACCENT),
+                                            );
+                                            ui.vertical(|ui| {
+                                                ui.label(
+                                                    egui::RichText::new(format!(
+                                                        "Nouvelle version disponible : v{latest}"
+                                                    ))
+                                                    .strong(),
+                                                );
+                                                ui.label(
+                                                    egui::RichText::new(format!(
+                                                        "actuelle v{} · intégrité vérifiée (SHA-256)",
+                                                        viewerkiller::update::CURRENT_VERSION
+                                                    ))
+                                                    .color(theme::MUTED)
+                                                    .size(12.0),
+                                                );
+                                                ui.hyperlink_to("Voir la release", &url);
+                                            });
+                                            ui.with_layout(
+                                                egui::Layout::right_to_left(egui::Align::Center),
+                                                |ui| {
+                                                    let status =
+                                                        self.update_status.lock().unwrap().clone();
+                                                    if let Some(msg) = status {
+                                                        ui.label(
+                                                            egui::RichText::new(msg)
+                                                                .color(theme::MUTED),
+                                                        );
+                                                    } else {
+                                                        let btn = egui::Button::new(
+                                                            egui::RichText::new("⬇  Mettre à jour")
+                                                                .color(theme::ON_ACCENT)
+                                                                .strong(),
+                                                        )
+                                                        .fill(theme::ACCENT)
+                                                        .rounding(egui::Rounding::same(9.0));
+                                                        if ui.add(btn).clicked() {
+                                                            *self.update_status.lock().unwrap() =
+                                                                Some("Téléchargement et vérification…".into());
+                                                            let status = self.update_status.clone();
+                                                            std::thread::spawn(move || {
+                                                                if let Err(e) =
+                                                                    viewerkiller::update::self_update(
+                                                                        viewerkiller::update::ASSET_GUI,
+                                                                    )
+                                                                {
+                                                                    *status.lock().unwrap() =
+                                                                        Some(format!("Échec : {e:#}"));
+                                                                }
+                                                            });
+                                                        }
+                                                    }
+                                                },
+                                            );
                                         });
-                                    }
-                                }
+                                    });
+                                ui.add_space(16.0);
                             }
-                        }
-                    });
+
+                            ui.columns(2, |cols| {
+                                card(&mut cols[0], |ui| {
+                                    ui.label(
+                                        egui::RichText::new("🖥  Héberger ce poste")
+                                            .size(15.0)
+                                            .strong(),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(
+                                            "Génère un code et un mot de passe à transmettre ; le poste attend une connexion entrante.",
+                                        )
+                                        .color(theme::MUTED)
+                                        .size(12.5),
+                                    );
+                                    ui.add_space(8.0);
+                                    if primary_button(ui, "Démarrer l'hébergement").clicked() {
+                                        let (screen, task) =
+                                            start_host(&self.rt, self.host_fps, self.host_quality);
+                                        next = Some(screen);
+                                        new_host_task = Some(task);
+                                    }
+                                });
+                                card(&mut cols[1], |ui| {
+                                    ui.label(
+                                        egui::RichText::new("🔗  Se connecter à un poste")
+                                            .size(15.0)
+                                            .strong(),
+                                    );
+                                    labeled_input(
+                                        ui,
+                                        "Adresse de l'hôte",
+                                        &mut self.home_form.address,
+                                        false,
+                                    );
+                                    labeled_input(ui, "Code", &mut self.home_form.code, false);
+                                    labeled_input(
+                                        ui,
+                                        "Mot de passe",
+                                        &mut self.home_form.password,
+                                        true,
+                                    );
+                                    ui.add_space(8.0);
+                                    if primary_button(ui, "Se connecter").clicked() {
+                                        match start_connect(&self.rt, &self.home_form) {
+                                            Ok(screen) => next = Some(screen),
+                                            Err(e) => next = Some(Screen::Error(e)),
+                                        }
+                                    }
+                                });
+                            });
+
+                            ui.add_space(16.0);
+                            ui.collapsing("⚙  Réglages d'hébergement", |ui| {
+                                ui.add(
+                                    egui::Slider::new(&mut self.host_fps, 5..=30).text("Images / s"),
+                                );
+                                ui.add(
+                                    egui::Slider::new(&mut self.host_quality, 40..=95)
+                                        .text("Qualité JPEG"),
+                                );
+                                ui.label(
+                                    egui::RichText::new(
+                                        "À appliquer avant de démarrer l'hébergement.",
+                                    )
+                                    .color(theme::MUTED)
+                                    .small(),
+                                );
+                            });
+                        });
                 });
             }
 
@@ -391,43 +609,97 @@ impl eframe::App for App {
                 }
 
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.vertical_centered(|ui| {
-                        ui.add_space(80.0);
-                        ui.heading("Hôte en écoute");
-                        ui.add_space(20.0);
-                        ui.label(format!("Écoute sur : {}", host.bind_addr));
-                        if !host.addresses.is_empty() {
-                            ui.add_space(10.0);
-                            ui.label(
-                                egui::RichText::new("Adresses IP (pour le contrôleur)").strong(),
-                            );
-                            for (name, ip) in &host.addresses {
-                                ui.label(egui::RichText::new(format!("{name} : {ip}")).monospace());
-                            }
-                        }
-                        ui.add_space(20.0);
-                        ui.label(egui::RichText::new("Code").strong());
-                        ui.label(egui::RichText::new(&host.code).size(36.0).monospace());
-                        ui.add_space(10.0);
-                        ui.label(egui::RichText::new("Mot de passe").strong());
-                        ui.label(egui::RichText::new(&host.password).size(24.0).monospace());
-                        ui.add_space(20.0);
-                        if let Some(peer) = host.active {
-                            ui.colored_label(
-                                egui::Color32::from_rgb(0xE0, 0x50, 0x50),
-                                format!("🔴 Session en cours depuis {peer}"),
-                            );
-                        } else {
-                            ui.label(
-                                egui::RichText::new("Transmettez ces identifiants au contrôleur.")
-                                    .weak(),
-                            );
-                        }
-                        ui.add_space(20.0);
-                        if ui.button("Retour (arrêter l'hébergement)").clicked() {
-                            next = Some(Screen::Home);
-                        }
-                    });
+                    egui::Frame::none()
+                        .inner_margin(egui::Margin::symmetric(46.0, 34.0))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                brand_header(ui, "Ce poste est prêt à être contrôlé");
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if let Some(peer) = host.active {
+                                            status_pill(
+                                                ui,
+                                                theme::DANGER,
+                                                &format!("Session en cours · {peer}"),
+                                            );
+                                        } else {
+                                            status_pill(
+                                                ui,
+                                                theme::SUCCESS,
+                                                "En attente de connexion",
+                                            );
+                                        }
+                                    },
+                                );
+                            });
+                            ui.add_space(20.0);
+
+                            card(ui, |ui| {
+                                ui.columns(2, |cols| {
+                                    cols[0].label(
+                                        egui::RichText::new("CODE DE CONNEXION")
+                                            .color(theme::MUTED)
+                                            .size(11.0),
+                                    );
+                                    cols[0].horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new(&host.code)
+                                                .size(34.0)
+                                                .monospace()
+                                                .strong(),
+                                        );
+                                        if copy_button(ui).clicked() {
+                                            ui.ctx().copy_text(host.code.clone());
+                                        }
+                                    });
+                                    cols[1].label(
+                                        egui::RichText::new("MOT DE PASSE")
+                                            .color(theme::MUTED)
+                                            .size(11.0),
+                                    );
+                                    cols[1].horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new(&host.password)
+                                                .size(22.0)
+                                                .monospace()
+                                                .strong(),
+                                        );
+                                        if copy_button(ui).clicked() {
+                                            ui.ctx().copy_text(host.password.clone());
+                                        }
+                                    });
+                                });
+
+                                if !host.addresses.is_empty() {
+                                    ui.add_space(16.0);
+                                    ui.label(
+                                        egui::RichText::new("ADRESSES DE CE POSTE")
+                                            .color(theme::MUTED)
+                                            .size(11.0),
+                                    );
+                                    ui.add_space(4.0);
+                                    ui.horizontal_wrapped(|ui| {
+                                        for (name, ip) in &host.addresses {
+                                            ip_chip(ui, name, &ip.to_string());
+                                        }
+                                    });
+                                }
+
+                                ui.add_space(18.0);
+                                ui.horizontal(|ui| {
+                                    if ui.button("Arrêter l'hébergement").clicked() {
+                                        next = Some(Screen::Home);
+                                    }
+                                    if ui.button("Copier les identifiants").clicked() {
+                                        ui.ctx().copy_text(format!(
+                                            "Code : {}\nMot de passe : {}",
+                                            host.code, host.password
+                                        ));
+                                    }
+                                });
+                            });
+                        });
                 });
 
                 // Boîte de dialogue de consentement, au-dessus de l'écran hôte.
@@ -461,56 +733,23 @@ impl eframe::App for App {
                 ctx.request_repaint_after(Duration::from_millis(200));
             }
 
-            Screen::Connect(form) => {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.add_space(60.0);
-                    ui.vertical_centered(|ui| {
-                        ui.heading("Se connecter à un hôte");
-                    });
-                    ui.add_space(20.0);
-                    egui::Grid::new("form")
-                        .num_columns(2)
-                        .spacing([12.0, 12.0])
-                        .show(ui, |ui| {
-                            ui.label("Code");
-                            ui.text_edit_singleline(&mut form.code);
-                            ui.end_row();
-                            ui.label("Mot de passe");
-                            ui.add(egui::TextEdit::singleline(&mut form.password).password(true));
-                            ui.end_row();
-                            ui.label("Adresse de l'hôte");
-                            ui.text_edit_singleline(&mut form.address);
-                            ui.end_row();
-                        });
-                    ui.add_space(10.0);
-                    ui.label(
-                        egui::RichText::new(
-                            "Adresse IP (et port optionnel) de la machine à contrôler, ex. 10.0.0.5 ou 10.0.0.5:47600.",
-                        )
-                        .weak(),
-                    );
-                    ui.add_space(20.0);
-                    ui.horizontal(|ui| {
-                        if ui.button("Se connecter").clicked() {
-                            match start_connect(&self.rt, form) {
-                                Ok(screen) => next = Some(screen),
-                                Err(e) => next = Some(Screen::Error(e)),
-                            }
-                        }
-                        if ui.button("Retour").clicked() {
-                            next = Some(Screen::Home);
-                        }
-                    });
-                });
-            }
-
             Screen::Connecting => {
                 // Le résultat arrive via le canal stocké dans CONNECT_RX (ci-dessous).
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.vertical_centered(|ui| {
-                        ui.add_space(160.0);
-                        ui.spinner();
-                        ui.label("Connexion à l'hôte…");
+                        ui.add_space(150.0);
+                        ui.add(egui::Spinner::new().size(34.0).color(theme::ACCENT));
+                        ui.add_space(14.0);
+                        ui.label(
+                            egui::RichText::new("Connexion à l'hôte…")
+                                .size(15.0)
+                                .color(theme::TEXT),
+                        );
+                        ui.add_space(4.0);
+                        ui.label(
+                            egui::RichText::new("Établissement du canal chiffré")
+                                .color(theme::MUTED),
+                        );
                     });
                 });
                 ctx.request_repaint_after(Duration::from_millis(100));
@@ -551,41 +790,55 @@ impl eframe::App for App {
                     }
 
                     egui::TopBottomPanel::top("barre").show(ctx, |ui| {
+                        ui.add_space(3.0);
                         ui.horizontal(|ui| {
+                            ui.add_space(4.0);
                             if let Some((w, h)) = session.remote_size {
-                                ui.label(format!("Écran distant {w}×{h}"));
-                            } else {
-                                ui.label("Connexion établie…");
-                            }
-                            if session.reconnecting {
-                                ui.colored_label(
-                                    egui::Color32::from_rgb(0xE0, 0xB0, 0x40),
-                                    "⟳ Connexion perdue — reconnexion…",
+                                ui.label(
+                                    egui::RichText::new(format!("Écran distant · {w} × {h}"))
+                                        .color(theme::MUTED),
                                 );
-                            }
-                            if ui.button("Déconnecter").clicked() {
-                                // Relâche les modificateurs tenus, sinon l'hôte
-                                // garderait Ctrl/Alt/Shift enfoncés.
-                                send_modifier_transitions(session, egui::Modifiers::default());
-                                next = Some(Screen::Home);
+                            } else {
+                                ui.label(
+                                    egui::RichText::new("Connexion établie…").color(theme::MUTED),
+                                );
                             }
                             // Sélecteur de moniteur (seulement si l'hôte en a plusieurs).
                             if session.monitors.len() > 1 {
                                 ui.separator();
-                                ui.label("Écran :");
                                 let monitors = session.monitors.clone();
                                 for m in &monitors {
-                                    let label = if m.primary {
-                                        format!("{} (principal)", m.index + 1)
-                                    } else {
-                                        format!("{}", m.index + 1)
-                                    };
-                                    if ui.button(label).clicked() {
+                                    if ui.button(format!("Écran {}", m.index + 1)).clicked() {
                                         let _ = session.monitor_tx.send(m.index);
                                     }
                                 }
                             }
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let dc = egui::Button::new(
+                                        egui::RichText::new("⏻  Déconnecter").color(theme::DANGER),
+                                    )
+                                    .stroke(egui::Stroke::new(1.0, theme::DANGER));
+                                    if ui.add(dc).clicked() {
+                                        // Relâche les modificateurs tenus, sinon l'hôte
+                                        // garderait Ctrl/Alt/Shift enfoncés.
+                                        send_modifier_transitions(
+                                            session,
+                                            egui::Modifiers::default(),
+                                        );
+                                        next = Some(Screen::Home);
+                                    }
+                                    if session.reconnecting {
+                                        ui.label(
+                                            egui::RichText::new("⟳ Reconnexion…")
+                                                .color(egui::Color32::from_rgb(0xE0, 0xB0, 0x40)),
+                                        );
+                                    }
+                                },
+                            );
                         });
+                        ui.add_space(3.0);
                     });
                     egui::CentralPanel::default().show(ctx, |ui| {
                         draw_session(ui, session);
@@ -597,8 +850,14 @@ impl eframe::App for App {
             Screen::Error(msg) => {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.vertical_centered(|ui| {
-                        ui.add_space(140.0);
-                        ui.colored_label(egui::Color32::LIGHT_RED, msg.clone());
+                        ui.add_space(130.0);
+                        ui.label(egui::RichText::new("⚠").size(36.0).color(theme::DANGER));
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(msg.clone())
+                                .size(15.0)
+                                .color(theme::TEXT),
+                        );
                         ui.add_space(20.0);
                         if ui.button("Retour à l'accueil").clicked() {
                             next = Some(Screen::Home);
@@ -914,7 +1173,6 @@ fn start_host(
     let screen = Screen::Host(HostScreen {
         code,
         password,
-        bind_addr,
         addresses: local_ipv4_addresses(),
         consent_rx,
         pending: None,
