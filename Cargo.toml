@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.17"
+version = "0.1.18"
 edition = "2021"
 # Source-visible, non commerciale, sans modification, avec attribution —
 # voir le fichier LICENSE. Pas une licence libre / open source.
@@ -50,6 +50,8 @@ rand = "0.8"
 ureq = { version = "2", default-features = false, features = ["native-tls"] }
 native-tls = "0.2"
 serde_json = "1"
+# Vérification d'intégrité SHA256 des binaires téléchargés (auto-update, J16b).
+sha2 = "0.10"
 
 [profile.release]
 opt-level = 3

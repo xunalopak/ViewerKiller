@@ -30,6 +30,9 @@ fn main() -> eframe::Result {
         )
         .init();
 
+    // Nettoie un éventuel ancien binaire laissé par une mise à jour (J16b).
+    viewerkiller::update::cleanup_old_update();
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([960.0, 640.0]),
         ..Default::default()
@@ -65,6 +68,9 @@ struct App {
     host_quality: u8,
     /// Hook clavier système (Alt+Tab, touche Windows…) ; no-op hors Windows.
     system_hook: Box<dyn vk_platform::SystemKeyHook>,
+    /// Statut de la mise à jour en cours (J16b) : `Some(msg)` = téléchargement ou
+    /// échec ; partagé avec le thread de mise à jour.
+    update_status: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl App {
@@ -86,6 +92,7 @@ impl App {
             host_fps: 15,
             host_quality: vk_media::DEFAULT_QUALITY,
             system_hook: vk_platform::default_system_key_hook(),
+            update_status: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
     }
 }
@@ -323,17 +330,42 @@ impl eframe::App for App {
                                 .small(),
                             );
                         });
-                        if let Some(info) = &self.update_info {
+                        if self.update_info.is_some() {
+                            let latest = self.update_info.as_ref().unwrap().latest.clone();
+                            let url = self.update_info.as_ref().unwrap().url.clone();
                             ui.add_space(30.0);
                             ui.colored_label(
                                 egui::Color32::from_rgb(0x40, 0xA0, 0xE0),
                                 format!(
-                                    "⬆ Nouvelle version disponible : v{} (actuelle v{})",
-                                    info.latest,
+                                    "⬆ Nouvelle version disponible : v{latest} (actuelle v{})",
                                     viewerkiller::update::CURRENT_VERSION
                                 ),
                             );
-                            ui.hyperlink_to("Voir la release", &info.url);
+                            ui.hyperlink_to("Voir la release", &url);
+                            // J16b : téléchargement + vérif SHA256 + remplacement.
+                            let status = self.update_status.lock().unwrap().clone();
+                            match status {
+                                Some(msg) => {
+                                    ui.label(egui::RichText::new(msg).weak());
+                                }
+                                None => {
+                                    if ui.button("⬇  Mettre à jour maintenant").clicked() {
+                                        *self.update_status.lock().unwrap() =
+                                            Some("Téléchargement et vérification…".into());
+                                        let status = self.update_status.clone();
+                                        std::thread::spawn(move || {
+                                            // En cas de succès, self_update relance et
+                                            // quitte → ce thread meurt avec le process.
+                                            if let Err(e) = viewerkiller::update::self_update(
+                                                viewerkiller::update::ASSET_GUI,
+                                            ) {
+                                                *status.lock().unwrap() =
+                                                    Some(format!("Échec : {e:#}"));
+                                            }
+                                        });
+                                    }
+                                }
+                            }
                         }
                     });
                 });

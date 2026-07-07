@@ -156,14 +156,21 @@ maîtrisées et un chemin auditable.
 - Choix TLS : `native-tls` (OpenSSL sur Linux, SChannel sur Windows) plutôt que
   rustls/ring, pour garder le cross-check Windows depuis Linux (pas de C).
 
-### J16b — Téléchargement + remplacement
+### J16b — Téléchargement + remplacement — **fait (v0.1.18)**
 
-- [ ] Télécharger l'asset, **vérifier le SHA256** avant tout (intégrité).
-- [ ] Swap Windows : renommer l'exe courant en `.old` (un exe en cours ne peut
-      être écrasé), écrire le neuf, relancer, purger le `.old` au démarrage
-      suivant. Fonctionne sans UAC tant que la distribution reste un zip
-      portable en dossier utilisateur.
-- [ ] Gérer les **deux** binaires (`viewerkiller.exe`, `viewerkiller-gui.exe`).
+- [x] `download_and_verify` : télécharge l'asset via l'API Releases et **vérifie
+      son SHA256** contre `SHA256SUMS.txt` **avant** toute utilisation (crate
+      `sha2`). Parsing + hash = fonctions pures testées.
+- [x] Swap : renomme l'exe courant en `.old` (un exe en cours ne peut être
+      écrasé mais peut être renommé), écrit le neuf, relance, purge le `.old` au
+      démarrage suivant (`cleanup_old_update`). Restaure l'ancien si l'écriture
+      échoue.
+- [x] Les **deux** binaires : bouton « ⬇ Mettre à jour maintenant » sur l'accueil
+      GUI (asset `viewerkiller-gui.exe`) ; sous-commande `viewerkiller update`
+      (asset `viewerkiller.exe`). Application **manuelle** (jamais silencieuse).
+- Durcissement restant (post-jalon) : **signature minisign** — le SHA256 vient de
+  la même release, il protège l'intégrité du transfert mais pas contre une release
+  compromise ; une signature à clé publique embarquée le ferait.
 
 ### Points de vigilance sécurité
 

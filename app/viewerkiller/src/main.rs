@@ -52,10 +52,25 @@ fn spawn_update_check() {
 #[tokio::main]
 async fn main() -> Result<()> {
     init_tracing();
+    viewerkiller::update::cleanup_old_update();
     spawn_update_check();
     let args: Vec<String> = std::env::args().collect();
 
     match args.get(1).map(String::as_str) {
+        Some("update") => {
+            println!("Recherche et téléchargement de la dernière version…");
+            match tokio::task::spawn_blocking(|| {
+                viewerkiller::update::self_update(viewerkiller::update::ASSET_CLI)
+            })
+            .await?
+            {
+                Ok(()) => Ok(()), // n'arrive pas : self_update relance et quitte
+                Err(e) => {
+                    eprintln!("Échec de la mise à jour : {e:#}");
+                    std::process::exit(1);
+                }
+            }
+        }
         Some("host") => {
             let bind_addr = args
                 .get(2)
@@ -81,6 +96,7 @@ async fn main() -> Result<()> {
             eprintln!("Usage :");
             eprintln!("  viewerkiller host [ip[:port]]");
             eprintln!("  viewerkiller connect <code> <mot_de_passe> <ip[:port]>");
+            eprintln!("  viewerkiller update");
             std::process::exit(2);
         }
     }

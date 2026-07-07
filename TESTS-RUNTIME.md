@@ -173,6 +173,12 @@ Synchro toutes les ~0,5 s dans les deux sens.
       silencieuse, non bloquante).
 - [ ] **11.3** En **CLI**, `viewerkiller host` affiche une ligne
       `ℹ Nouvelle version disponible…` le cas échéant.
+- [ ] **11.4** ⭐ **Auto-update (J16b, v0.1.18)** : avec une version antérieure,
+      clique **« ⬇ Mettre à jour maintenant »** sur l'accueil → téléchargement +
+      vérification SHA256 → l'appli **se relance dans la nouvelle version** (vérifie
+      le numéro de version). En CLI : `viewerkiller update`.
+- [ ] **11.5** Après une mise à jour, **aucun fichier `.exe.old`** ne subsiste (il
+      est purgé au démarrage suivant).
 
 ## 12. Réglages d'hébergement (v0.1.12)
 
