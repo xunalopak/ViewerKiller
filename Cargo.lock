@@ -3790,7 +3790,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "viewerkiller"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "anyhow",
  "eframe",
@@ -3812,7 +3812,7 @@ dependencies = [
 
 [[package]]
 name = "vk-core"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "blake3",
  "postcard",
@@ -3823,7 +3823,7 @@ dependencies = [
 
 [[package]]
 name = "vk-media"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "jpeg-decoder",
  "jpeg-encoder",
@@ -3835,7 +3835,7 @@ dependencies = [
 
 [[package]]
 name = "vk-net"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "serde",
  "thiserror 2.0.18",
@@ -3846,7 +3846,7 @@ dependencies = [
 
 [[package]]
 name = "vk-platform"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "anyhow",
  "arboard",

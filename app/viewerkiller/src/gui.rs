@@ -330,18 +330,17 @@ impl eframe::App for App {
                                 .small(),
                             );
                         });
-                        if self.update_info.is_some() {
-                            let latest = self.update_info.as_ref().unwrap().latest.clone();
-                            let url = self.update_info.as_ref().unwrap().url.clone();
+                        if let Some(info) = &self.update_info {
                             ui.add_space(30.0);
                             ui.colored_label(
                                 egui::Color32::from_rgb(0x40, 0xA0, 0xE0),
                                 format!(
-                                    "⬆ Nouvelle version disponible : v{latest} (actuelle v{})",
+                                    "⬆ Nouvelle version disponible : v{} (actuelle v{})",
+                                    info.latest,
                                     viewerkiller::update::CURRENT_VERSION
                                 ),
                             );
-                            ui.hyperlink_to("Voir la release", &url);
+                            ui.hyperlink_to("Voir la release", &info.url);
                             // J16b : téléchargement + vérif SHA256 + remplacement.
                             let status = self.update_status.lock().unwrap().clone();
                             match status {
