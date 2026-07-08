@@ -119,10 +119,16 @@ fn brand_header(ui: &mut egui::Ui, subtitle: &str) {
     });
 }
 
-/// Champ de saisie labellisé, pleine largeur.
-fn labeled_input(ui: &mut egui::Ui, label: &str, value: &mut String, password: bool) {
+/// Champ de saisie labellisé, pleine largeur, à hauteur confortable (~33 px),
+/// avec un texte d'exemple grisé tant qu'il est vide.
+fn labeled_input(ui: &mut egui::Ui, label: &str, hint: &str, value: &mut String, password: bool) {
     ui.label(egui::RichText::new(label).color(theme::MUTED).size(11.5));
-    let mut edit = egui::TextEdit::singleline(value).desired_width(f32::INFINITY);
+    let mut edit = egui::TextEdit::singleline(value)
+        .desired_width(f32::INFINITY)
+        .font(egui::FontId::proportional(14.0))
+        .margin(egui::Margin::symmetric(10.0, 8.0))
+        .vertical_align(egui::Align::Center)
+        .hint_text(egui::RichText::new(hint).color(theme::MUTED).size(13.0));
     if password {
         edit = edit.password(true);
     }
@@ -240,6 +246,8 @@ struct App {
     update_status: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Formulaire de connexion de l'accueil (persistant entre navigations).
     home_form: ConnectForm,
+    /// Fenêtre « Paramètres » ouverte (bouton ⚙ de l'accueil).
+    show_settings: bool,
     /// Mode capture d'écrans `--ui-shot` (revue visuelle) ; `None` en usage normal.
     shots: Option<ShotRunner>,
 }
@@ -265,6 +273,7 @@ impl App {
             system_hook: vk_platform::default_system_key_hook(),
             update_status: std::sync::Arc::new(std::sync::Mutex::new(None)),
             home_form: ConnectForm::default(),
+            show_settings: false,
             shots: None,
         }
     }
@@ -296,12 +305,14 @@ const SHOT_SCENARIOS: &[&str] = &[
     "06-connexion",
     "07-erreur",
     "08-session",
+    "09-parametres",
 ];
 
 impl App {
     /// Installe l'état factice du scénario `idx` (mode `--ui-shot`).
     fn apply_shot_scenario(&mut self, idx: usize) {
         self.update_info = None;
+        self.show_settings = false;
         self.screen = match SHOT_SCENARIOS[idx] {
             "01-accueil" => Screen::Home,
             "02-accueil-maj" => {
@@ -320,6 +331,10 @@ impl App {
             "06-connexion" => Screen::Connecting,
             "07-erreur" => Screen::Error("Connexion refusée par l'hôte.".into()),
             "08-session" => Screen::Session(shot_session_screen()),
+            "09-parametres" => {
+                self.show_settings = true;
+                Screen::Home
+            }
             autre => unreachable!("scénario --ui-shot inconnu : {autre}"),
         };
     }
@@ -638,7 +653,21 @@ impl eframe::App for App {
                     egui::Frame::none()
                         .inner_margin(egui::Margin::symmetric(46.0, 34.0))
                         .show(ui, |ui| {
-                            brand_header(ui, "Contrôle à distance chiffré de bout en bout");
+                            ui.horizontal(|ui| {
+                                brand_header(ui, "Contrôle à distance chiffré de bout en bout");
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        let gear = egui::Button::new(
+                                            egui::RichText::new("⚙").size(16.0),
+                                        )
+                                        .min_size(egui::vec2(34.0, 34.0));
+                                        if ui.add(gear).on_hover_text("Paramètres").clicked() {
+                                            self.show_settings = !self.show_settings;
+                                        }
+                                    },
+                                );
+                            });
                             ui.add_space(24.0);
 
                             if let Some(info) = &self.update_info {
@@ -715,7 +744,7 @@ impl eframe::App for App {
 
                             // Hauteur intérieure commune aux deux cartes, pour
                             // qu'elles s'alignent (la droite dicte la hauteur).
-                            const CARD_H: f32 = 238.0;
+                            const CARD_H: f32 = 280.0;
                             ui.columns(2, |cols| {
                                 card(&mut cols[0], |ui| {
                                     ui.set_min_height(CARD_H);
@@ -756,13 +785,23 @@ impl eframe::App for App {
                                     labeled_input(
                                         ui,
                                         "Adresse de l'hôte",
+                                        &format!(
+                                            "ex. 192.168.1.20 ou 192.168.1.20:{DEFAULT_PORT}"
+                                        ),
                                         &mut self.home_form.address,
                                         false,
                                     );
-                                    labeled_input(ui, "Code", &mut self.home_form.code, false);
+                                    labeled_input(
+                                        ui,
+                                        "Code",
+                                        "Affiché sur le poste hôte",
+                                        &mut self.home_form.code,
+                                        false,
+                                    );
                                     labeled_input(
                                         ui,
                                         "Mot de passe",
+                                        "Affiché sur le poste hôte",
                                         &mut self.home_form.password,
                                         true,
                                     );
@@ -779,25 +818,64 @@ impl eframe::App for App {
                                 });
                             });
 
-                            ui.add_space(16.0);
-                            ui.collapsing("⚙  Réglages d'hébergement", |ui| {
-                                ui.add(
-                                    egui::Slider::new(&mut self.host_fps, 5..=30).text("Images / s"),
-                                );
-                                ui.add(
-                                    egui::Slider::new(&mut self.host_quality, 40..=95)
-                                        .text("Qualité JPEG"),
-                                );
-                                ui.label(
-                                    egui::RichText::new(
-                                        "À appliquer avant de démarrer l'hébergement.",
-                                    )
-                                    .color(theme::MUTED)
-                                    .small(),
-                                );
-                            });
                         });
                 });
+
+                // Fenêtre « Paramètres » (bouton ⚙ de l'en-tête).
+                if self.show_settings {
+                    let mut open = true;
+                    egui::Window::new("Paramètres")
+                        .open(&mut open)
+                        .collapsible(false)
+                        .resizable(false)
+                        .default_width(360.0)
+                        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                        .show(ctx, |ui| {
+                            ui.spacing_mut().slider_width = 180.0;
+                            ui.add_space(4.0);
+                            ui.label(
+                                egui::RichText::new("HÉBERGEMENT")
+                                    .color(theme::MUTED)
+                                    .size(11.0),
+                            );
+                            ui.add(
+                                egui::Slider::new(&mut self.host_fps, 5..=30).text("Images / s"),
+                            );
+                            ui.add(
+                                egui::Slider::new(&mut self.host_quality, 40..=95)
+                                    .text("Qualité JPEG"),
+                            );
+                            ui.label(
+                                egui::RichText::new(
+                                    "Appliqués au prochain démarrage de l'hébergement.",
+                                )
+                                .color(theme::MUTED)
+                                .small(),
+                            );
+                            ui.add_space(10.0);
+                            ui.separator();
+                            ui.add_space(6.0);
+                            ui.label(
+                                egui::RichText::new("APPLICATION")
+                                    .color(theme::MUTED)
+                                    .size(11.0),
+                            );
+                            ui.horizontal(|ui| {
+                                ui.label(format!(
+                                    "Version v{}",
+                                    viewerkiller::update::CURRENT_VERSION
+                                ));
+                                ui.hyperlink_to(
+                                    "Notes de version",
+                                    "https://github.com/xunalopak/ViewerKiller/releases",
+                                );
+                            });
+                            ui.add_space(4.0);
+                        });
+                    if !open {
+                        self.show_settings = false;
+                    }
+                }
             }
 
             Screen::Host(host) => {
